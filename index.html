@@ -34,21 +34,109 @@ async function showReportSessionDetail(id){let box=$('#reportResults');let {data
 
 async function showAdminAttendance(){
  let [{data:courses,error:ce},{data:teachers,error:te}]=await Promise.all([
-  sb.from('courses').select('id,nombre,jornada,activo').eq('activo',true).order('jornada').order('nombre'),
+  sb.from('courses').select('id,nombre,jornada,activo').eq('activo',true),
   sb.from('teachers').select('id,nombre,activo').eq('activo',true).order('nombre')
  ]);
  if(ce||te){$('#adminBody').innerHTML='<div class="notice">'+esc((ce||te).message)+'</div>';return}
- let shifts=[...new Set((courses||[]).map(x=>x.jornada).filter(Boolean))];
- let today=new Date().toISOString().slice(0,10);
- $('#adminBody').innerHTML=`<div class="card"><h3>📝 Registrar / corregir asistencia</h3><p class="muted">Modo exclusivo para ADMIN. Selecciona los datos de la clase y carga la nómina. Si la asistencia ya existe, se abrirá para corregirla.</p><div class="report-filters"><label>Jornada<select id="aaShift"><option value="">Seleccionar…</option>${shifts.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label><label>Curso<select id="aaCourse"><option value="">Seleccionar…</option></select></label><label>Docente<select id="aaTeacher"><option value="">Seleccionar…</option>${(teachers||[]).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></label><label>Fecha<input id="aaDate" type="date" value="${today}"></label><label>Período<select id="aaPeriod"><option value="">Seleccionar…</option>${[1,2,3,4,5,6,7,8,9,10].map(x=>`<option value="${x}">${x}</option>`).join('')}</select></label><label>Asignatura<input id="aaSubject" list="aaSubjects" placeholder="Ej.: Matemática"><datalist id="aaSubjects"></datalist></label></div><div class="row" style="margin-top:12px"><button id="aaLoad" class="primary">Cargar nómina</button><button id="aaClear">Limpiar</button></div></div><div id="aaWork"></div>`;
- const shift=$('#aaShift'),course=$('#aaCourse');
- function renderCourses(){let v=shift.value;course.innerHTML='<option value="">Seleccionar…</option>'+(courses||[]).filter(x=>!v||x.jornada===v).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('');$('#aaSubjects').innerHTML='';$('#aaSubject').value=''}
+
+ const gradeOrder=[
+  'INICIAL I','INICIAL II','PRIMERO EGB','SEGUNDO EGB','TERCERO EGB','CUARTO EGB',
+  'QUINTO EGB','SEXTO EGB','SÉPTIMO EGB','SEPTIMO EGB','OCTAVO EGB','NOVENO EGB',
+  'DÉCIMO EGB','DECIMO EGB','PRIMERO BGU','SEGUNDO BGU','TERCERO BGU'
+ ];
+ const norm=s=>String(s||'').trim().toUpperCase();
+ const gradeRank=name=>{let i=gradeOrder.indexOf(norm(name));return i<0?999:i};
+ courses=(courses||[]).sort((a,b)=>{
+  let ja=norm(a.jornada),jb=norm(b.jornada);
+  if(ja!==jb)return ja.localeCompare(jb,'es');
+  let ra=gradeRank(a.nombre),rb=gradeRank(b.nombre);
+  return ra!==rb?ra-rb:norm(a.nombre).localeCompare(norm(b.nombre),'es');
+ });
+ let teacherMap=new Map((teachers||[]).map(t=>[t.id,t]));
+ let shifts=[...new Set(courses.map(x=>x.jornada).filter(Boolean))];
+ let now=new Date(),today=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+ $('#adminBody').innerHTML=`<div class="card"><h3>📝 Registrar / corregir asistencia</h3><p class="muted">Selecciona jornada y grado. El sistema usará el horario institucional para mostrar únicamente los docentes de ese grado y, al elegir fecha y período, colocará automáticamente el docente y la asignatura.</p><div class="report-filters"><label>Jornada<select id="aaShift"><option value="">Seleccionar…</option>${shifts.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></label><label>Grado / curso<select id="aaCourse"><option value="">Seleccionar…</option></select></label><label>Fecha<input id="aaDate" type="date" value="${today}"></label><label>Período / hora<select id="aaPeriod"><option value="">Seleccionar…</option></select></label><label>Docente<select id="aaTeacher"><option value="">Seleccionar grado primero…</option></select></label><label>Asignatura<input id="aaSubject" list="aaSubjects" placeholder="Se completa con el horario"><datalist id="aaSubjects"></datalist></label></div><div id="aaAutoInfo" class="notice hide"></div><div class="row" style="margin-top:12px"><button id="aaLoad" class="primary">Cargar nómina</button><button id="aaClear">Limpiar</button></div></div><div id="aaWork"></div>`;
+
+ const shift=$('#aaShift'),course=$('#aaCourse'),dateEl=$('#aaDate'),periodEl=$('#aaPeriod'),teacherEl=$('#aaTeacher'),subjectEl=$('#aaSubject'),info=$('#aaAutoInfo');
+ let courseSchedules=[];
+
+ function localDay(dateStr){
+  if(!dateStr)return null;
+  let [y,m,d]=dateStr.split('-').map(Number);
+  let day=new Date(y,m-1,d).getDay();
+  return day>=1&&day<=5?day:null;
+ }
+ function renderCourses(){
+  let v=shift.value;
+  let list=courses.filter(x=>!v||x.jornada===v);
+  course.innerHTML='<option value="">Seleccionar…</option>'+list.map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('');
+  courseSchedules=[];teacherEl.innerHTML='<option value="">Seleccionar grado primero…</option>';
+  periodEl.innerHTML='<option value="">Seleccionar…</option>';
+  subjectEl.value='';$('#aaSubjects').innerHTML='';info.classList.add('hide');$('#aaWork').innerHTML='';
+ }
+ async function loadCourseSchedules(){
+  let cid=course.value;
+  courseSchedules=[];subjectEl.value='';$('#aaSubjects').innerHTML='';info.classList.add('hide');$('#aaWork').innerHTML='';
+  if(!cid){teacherEl.innerHTML='<option value="">Seleccionar grado primero…</option>';periodEl.innerHTML='<option value="">Seleccionar…</option>';return}
+  let {data,error}=await sb.from('schedules').select('id,dia,periodo,inicio,fin,asignatura,teacher_id,activo').eq('course_id',cid).eq('activo',true).order('dia').order('periodo');
+  if(error){toast(error.message,true);return}
+  courseSchedules=data||[];
+  let tids=[...new Set(courseSchedules.map(x=>x.teacher_id).filter(Boolean))];
+  let gradeTeachers=tids.map(id=>teacherMap.get(id)).filter(Boolean).sort((a,b)=>a.nombre.localeCompare(b.nombre,'es'));
+  teacherEl.innerHTML='<option value="">Seleccionar…</option>'+gradeTeachers.map(t=>`<option value="${t.id}">${esc(t.nombre)}</option>`).join('');
+  let subs=[...new Set(courseSchedules.map(x=>x.asignatura).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+  $('#aaSubjects').innerHTML=subs.map(x=>`<option value="${esc(x)}"></option>`).join('');
+  await refreshPeriodsAndAuto();
+ }
+ async function refreshPeriodsAndAuto(){
+  let day=localDay(dateEl.value);
+  subjectEl.value='';teacherEl.value='';info.classList.add('hide');
+  let dayRows=day?courseSchedules.filter(x=>Number(x.dia)===day):[];
+  let periods=[...new Map(dayRows.map(x=>[Number(x.periodo),x])).values()].sort((a,b)=>Number(a.periodo)-Number(b.periodo));
+  if(periods.length){
+   periodEl.innerHTML='<option value="">Seleccionar…</option>'+periods.map(x=>`<option value="${x.periodo}">${x.periodo} · ${(x.inicio||'').slice(0,5)}–${(x.fin||'').slice(0,5)}</option>`).join('');
+   if(dateEl.value===today){
+    let hhmm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    let current=dayRows.find(x=>(x.inicio||'').slice(0,5)<=hhmm && hhmm<(x.fin||'').slice(0,5));
+    if(current){periodEl.value=String(current.periodo);autoFromSchedule()}
+   }
+  }else{
+   periodEl.innerHTML='<option value="">Seleccionar…</option>'+[1,2,3,4,5,6,7,8,9,10].map(x=>`<option value="${x}">${x}</option>`).join('');
+   info.textContent=day?'No existe horario cargado para este grado en la fecha seleccionada. Puedes escoger manualmente docente, período y asignatura.':'La fecha seleccionada no corresponde a lunes–viernes.';
+   info.classList.remove('hide');
+  }
+ }
+ function autoFromSchedule(){
+  let day=localDay(dateEl.value),period=Number(periodEl.value);
+  if(!day||!period)return;
+  let matches=courseSchedules.filter(x=>Number(x.dia)===day&&Number(x.periodo)===period);
+  if(matches.length===1){
+   let s=matches[0];
+   teacherEl.value=s.teacher_id||'';
+   subjectEl.value=s.asignatura||'';
+   let tn=teacherMap.get(s.teacher_id)?.nombre||'Docente';
+   info.innerHTML=`✓ Horario encontrado: <b>${esc(tn)}</b> · ${esc(s.asignatura||'')} · ${(s.inicio||'').slice(0,5)}–${(s.fin||'').slice(0,5)}`;
+   info.classList.remove('hide');
+  }else if(matches.length>1){
+   let tids=[...new Set(matches.map(x=>x.teacher_id).filter(Boolean))];
+   teacherEl.innerHTML='<option value="">Seleccionar…</option>'+tids.map(id=>teacherMap.get(id)).filter(Boolean).map(t=>`<option value="${t.id}">${esc(t.nombre)}</option>`).join('');
+   let subs=[...new Set(matches.map(x=>x.asignatura).filter(Boolean))];
+   $('#aaSubjects').innerHTML=subs.map(x=>`<option value="${esc(x)}"></option>`).join('');
+   info.textContent='Hay más de una asignación en este período. Selecciona el docente y la asignatura correspondientes.';
+   info.classList.remove('hide');
+  }else{
+   info.textContent='No encontré una asignación de horario para este período. Puedes seleccionar manualmente.';
+   info.classList.remove('hide');
+  }
+ }
  shift.onchange=renderCourses;
- course.onchange=async()=>{let cid=course.value;$('#aaSubject').value='';$('#aaSubjects').innerHTML='';if(!cid)return;let {data}=await sb.from('schedules').select('asignatura,teacher_id').eq('course_id',cid).eq('activo',true);let subs=[...new Set((data||[]).map(x=>x.asignatura).filter(Boolean))].sort();$('#aaSubjects').innerHTML=subs.map(x=>`<option value="${esc(x)}"></option>`).join('');};
+ course.onchange=loadCourseSchedules;
+ dateEl.onchange=refreshPeriodsAndAuto;
+ periodEl.onchange=autoFromSchedule;
  $('#aaLoad').onclick=loadAdminAttendance;
  $('#aaClear').onclick=showAdminAttendance;
 }
-
 let adminAttendanceSession=null,adminAttendanceStudents=[];
 async function loadAdminAttendance(){
  let cid=$('#aaCourse').value,tid=$('#aaTeacher').value,date=$('#aaDate').value,period=Number($('#aaPeriod').value),subject=($('#aaSubject').value||'').trim(),work=$('#aaWork');
