@@ -110,7 +110,6 @@ async function showNotices(){
  box.innerHTML=`<div class="card"><h2>📝 Novedades pedagógicas</h2><p class="muted">Registra una novedad para uno o varios estudiantes. Solo se mostrará a la familia cuando esté activada la opción de notificación.</p>
  <div class="report-filters">
   <label>Curso<select id="nCourse"><option value="">Seleccionar…</option>${courses.map(x=>`<option value="${x.id}">${esc(x.jornada)} · ${esc(x.nombre)}</option>`).join('')}</select></label>
-  <label>Asignatura<select id="nSubject"><option value="">Selecciona primero el curso…</option></select></label>
   <label>Tipo<select id="nType">
    <option value="ACADEMICA">Académica</option>
    <option value="CONVIVENCIA">Convivencia</option>
@@ -139,21 +138,7 @@ async function showNotices(){
  }
  renderReasons();
  $('#nType').onchange=renderReasons;
- $('#nCourse').onchange=async()=>{await loadNoticeSubjects();await loadNoticeStudents()};
-}
-
-
-async function loadNoticeSubjects(){
- let cid=$('#nCourse').value,sel=$('#nSubject');
- if(!cid){sel.innerHTML='<option value="">Selecciona primero el curso…</option>';return}
- let q=sb.from('schedules').select('asignatura,teacher_id').eq('course_id',cid).eq('activo',true);
- if(profile.rol!=='ADMIN'&&teacher)q=q.eq('teacher_id',teacher.id);
- let {data,error}=await q;
- if(error){sel.innerHTML='<option value="">Error al cargar</option>';toast(error.message,true);return}
- let subjects=[...new Set((data||[]).map(x=>x.asignatura).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
- sel.innerHTML='<option value="">Seleccionar…</option>'+subjects.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
- if(subjects.length===1)sel.value=subjects[0];
- if(!subjects.length)sel.innerHTML='<option value="">Sin asignaturas en horario</option>';
+ $('#nCourse').onchange=loadNoticeStudents;
 }
 
 async function loadNoticeStudents(){
@@ -174,8 +159,8 @@ async function loadNoticeStudents(){
 async function saveNotices(){
  let selected=$$('.nStudent:checked');
  if(!selected.length){toast('Selecciona al menos un estudiante.',true);return}
- let cid=$('#nCourse').value,subject=$('#nSubject').value,type=$('#nType').value,reason=$('#nReason').value,obs=$('#nObs').value.trim(),date=$('#nDate').value,notify=$('#nNotify').checked;
- if(!cid||!subject||!type||!reason||!date){toast('Completa curso, asignatura, tipo, motivo y fecha.',true);return}
+ let cid=$('#nCourse').value,type=$('#nType').value,reason=$('#nReason').value,obs=$('#nObs').value.trim(),date=$('#nDate').value,notify=$('#nNotify').checked;
+ if(!cid||!type||!reason||!date){toast('Completa los datos de la novedad.',true);return}
  if(!teacher?.id && profile.rol!=='ADMIN'){toast('Tu usuario no está vinculado a un docente.',true);return}
 
  // En ADMIN, si existe vínculo docente se usa; de lo contrario teacher_id queda nulo solo si la BD lo permite.
@@ -184,7 +169,6 @@ async function saveNotices(){
   student_id:x.value,
   teacher_id:teacherId,
   course_id:cid,
-  asignatura:subject,
   tipo:type,
   motivo:reason,
   observacion:obs||null,
