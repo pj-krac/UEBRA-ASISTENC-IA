@@ -11,14 +11,69 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];let sb=null,profile=null,teacher=null,currentSchedule=null,currentStudents=[],currentSession=null;
 const cfg=window.UEBRA_CONFIG||{};const configured=cfg.SUPABASE_URL&&!cfg.SUPABASE_URL.includes('PEGA_AQUI')&&cfg.SUPABASE_ANON_KEY&&!cfg.SUPABASE_ANON_KEY.includes('PEGA_AQUI');if(!configured)$('#cfgwarn').classList.remove('hide');else sb=supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
 $('#signin').onclick=async()=>{if(!sb)return;$('#loginmsg').textContent='Ingresando…';let {data,error}=await sb.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});if(error){$('#loginmsg').textContent=error.message;return}await boot(data.user)};
-async function boot(user){let {data:p,error}=await sb.from('profiles').select('*').eq('id',user.id).single();if(error||!p){$('#loginmsg').textContent='Tu usuario existe, pero falta crear su perfil ADMIN/DOCENTE.';return}profile=p;let {data:t}=await sb.from('teachers').select('*').eq('profile_id',user.id).maybeSingle();teacher=t;$('#who').textContent=p.nombre+' · '+p.rol;$('#login').classList.add('hide');$('#app').classList.remove('hide');if(p.rol==='ADMIN')$('#adminTab').classList.remove('hide');await loadToday();await loadHistory();}
+async function boot(user){let {data:p,error}=await sb.from('profiles').select('*').eq('id',user.id).single();if(error||!p){$('#loginmsg').textContent='Tu usuario existe, pero falta crear su perfil ADMIN/DOCENTE.';return}profile=p;let {data:t}=await sb.from('teachers').select('*').eq('profile_id',user.id).maybeSingle();teacher=t;$('#who').textContent=p.nombre+' · '+p.rol;$('#login').classList.add('hide');$('#app').classList.remove('hide');if(p.rol==='ADMIN')$('#adminTab').classList.remove('hide');await updateQueueIndicator();await retryOfflineQueue(false);await loadToday();await loadHistory();}
 function dayNo(){let d=new Date().getDay();return d>=1&&d<=5?d:null}function hm(){let d=new Date();return d.toTimeString().slice(0,5)}
 async function loadToday(){let box=$('#todayclasses');box.classList.remove('hide');box.innerHTML='';$('#attendance').classList.add('hide');currentSchedule=null;currentSession=null;if(!teacher){box.innerHTML='<div class="card"><b>Modo administrador</b><p class="muted">Tu cuenta no está vinculada a un docente. Usa Administrar para gestionar la institución.</p></div>';return}let d=dayNo();if(!d){box.innerHTML='<div class="card">No hay clases programadas para hoy.</div>';return}let {data,error}=await sb.from('schedules').select('*,courses(*)').eq('teacher_id',teacher.id).eq('dia',d).eq('activo',true).order('periodo');if(error){box.innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}if(!data.length){box.innerHTML='<div class="card">No hay horario cargado para hoy.</div>';return}let date=new Date().toISOString().slice(0,10);let {data:sessions,error:se}=await sb.from('attendance_sessions').select('id,course_id,periodo,asignatura').eq('teacher_id',teacher.id).eq('fecha',date);if(se)sessions=[];let done=new Map((sessions||[]).map(x=>[`${x.course_id}|${x.periodo}|${x.asignatura}`,x.id]));box.innerHTML='<div class="card"><h2>Mis clases de hoy</h2>'+data.map(s=>{let sid=done.get(`${s.course_id}|${s.periodo}|${s.asignatura}`);return `<div class="listitem row"><div class="grow"><b>${s.inicio.slice(0,5)} · ${esc(s.courses.nombre)}</b><div class="muted">${esc(s.asignatura)} · ${esc(s.courses.jornada)} · ${s.inicio.slice(0,5)}–${s.fin.slice(0,5)}</div><span class="attbadge ${sid?'done':'pending'}">${sid?'✓ Registrada':'Pendiente'}</span></div><button data-s="${s.id}" data-session="${sid||''}">${sid?'Revisar / editar':'Pasar asistencia'}</button></div>`}).join('')+'</div>';$$('[data-s]').forEach(b=>b.onclick=()=>openSchedule(data.find(x=>x.id===b.dataset.s),b.dataset.session||null))}
 async function openSchedule(s,sessionId=null){currentSchedule=s;currentSession=null;$('#todayclasses').classList.add('hide');$('#attendance').classList.remove('hide');$('#classTitle').textContent=s.courses.nombre+' · '+s.asignatura;$('#classMeta').textContent=s.courses.jornada+' · '+s.inicio.slice(0,5)+'–'+s.fin.slice(0,5);let {data,error}=await sb.from('students').select('*').eq('course_id',s.course_id).eq('estado','ACTIVO').order('nombre');if(error){toast(error.message,true);return}currentStudents=data||[];$('#students').innerHTML=currentStudents.map((st,i)=>`<div class="student" data-id="${st.id}"><span class="muted">${i+1} · ${esc(st.cedula||'')}</span><b>${esc(st.nombre)}</b><div class="status">${['P','F','A','J'].map(x=>`<button data-st="${x}">${x}</button>`).join('')}</div><input class="obs" placeholder="Observación"></div>`).join('');$$('.status button').forEach(b=>b.onclick=()=>{b.parentElement.querySelectorAll('button').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');sum()});if(sessionId){let {data:sess,error:e1}=await sb.from('attendance_sessions').select('*').eq('id',sessionId).single();if(e1){toast('No se pudo recuperar la asistencia guardada: '+e1.message,true);sum();return}currentSession=sess;let {data:marks,error:e2}=await sb.from('attendance').select('student_id,estado,observacion').eq('session_id',sessionId);if(e2){toast('No se pudo recuperar el detalle de asistencia: '+e2.message,true);sum();return}(marks||[]).forEach(m=>{let r=$(`.student[data-id="${m.student_id}"]`);if(!r)return;let b=r.querySelector(`[data-st="${m.estado}"]`);if(b)b.classList.add('sel');r.querySelector('.obs').value=m.observacion||''});}sum()}
 function sum(){let a=$$('.student .sel').map(x=>x.dataset.st),n=currentStudents.length,c=x=>a.filter(v=>v===x).length;$('#summary').textContent=`${a.length}/${n} · P ${c('P')} · F ${c('F')} · A ${c('A')} · J ${c('J')} · pendientes ${n-a.length}`}
 $('#allP').onclick=()=>{$$('.student .status').forEach(d=>{d.querySelectorAll('button').forEach(x=>x.classList.remove('sel'));d.querySelector('[data-st=P]').classList.add('sel')});sum()};$('#backClasses').onclick=async()=>{await loadToday()};
 $('#saveAtt').onclick=async()=>{let rows=$$('.student');let miss=rows.filter(r=>!r.querySelector('.sel'));if(miss.length){toast(`Faltan ${miss.length} estudiantes por marcar.`,true);miss[0].scrollIntoView({behavior:'smooth',block:'center'});return}let btn=$('#saveAtt');btn.disabled=true;btn.textContent='Guardando…';let date=new Date().toISOString().slice(0,10);let {data:sess,error}=await sb.from('attendance_sessions').upsert({course_id:currentSchedule.course_id,teacher_id:teacher.id,fecha:date,periodo:currentSchedule.periodo,asignatura:currentSchedule.asignatura,created_by:profile.id},{onConflict:'course_id,fecha,periodo,asignatura'}).select().single();if(error){btn.disabled=false;btn.textContent='Guardar y sincronizar asistencia';return queueOffline(rows,date,error)}currentSession=sess;let payload=rows.map(r=>({session_id:sess.id,student_id:r.dataset.id,estado:r.querySelector('.sel').dataset.st,observacion:r.querySelector('.obs').value.trim()}));let res=await sb.from('attendance').upsert(payload,{onConflict:'session_id,student_id'});btn.disabled=false;btn.textContent='Guardar y sincronizar asistencia';if(res.error)return queueOffline(rows,date,res.error);$('#sync').textContent='● conectado';toast('✓ Asistencia guardada y sincronizada');await loadHistory();await loadToday()}
-function queueOffline(rows,date,error){let q=JSON.parse(localStorage.getItem('uebra_queue')||'[]');q.push({schedule:currentSchedule,date,items:rows.map(r=>({student_id:r.dataset.id,estado:r.querySelector('.sel')?.dataset.st,observacion:r.querySelector('.obs').value.trim()}))});localStorage.setItem('uebra_queue',JSON.stringify(q));$('#sync').textContent='● pendiente';toast('Sin conexión o error de sincronización. El registro quedó guardado en este teléfono para reintentar. '+(error?.message||''),true)}
+function getOfflineQueue(){try{return JSON.parse(localStorage.getItem('uebra_queue')||'[]')||[]}catch(e){return []}}
+function setOfflineQueue(q){localStorage.setItem('uebra_queue',JSON.stringify(q));updateQueueIndicator()}
+async function updateQueueIndicator(){let n=getOfflineQueue().length;if(!$('#sync'))return;$('#sync').textContent=n?`● ${n} pendiente${n===1?'':'s'}`:(navigator.onLine?'● conectado':'● sin conexión');$('#sync').title=n?'Toca para intentar sincronizar los registros pendientes':'Estado de sincronización'}
+function queueOffline(rows,date,error){
+ let q=getOfflineQueue();
+ let item={
+  id:(crypto.randomUUID?crypto.randomUUID():Date.now()+'-'+Math.random()),
+  saved_at:new Date().toISOString(),
+  schedule:{
+   id:currentSchedule?.id||null,
+   course_id:currentSchedule?.course_id||null,
+   teacher_id:currentSchedule?.teacher_id||teacher?.id||null,
+   periodo:currentSchedule?.periodo||null,
+   asignatura:currentSchedule?.asignatura||'',
+   courses:currentSchedule?.courses?{nombre:currentSchedule.courses.nombre,jornada:currentSchedule.courses.jornada}:null
+  },
+  date,
+  items:rows.map(r=>({student_id:r.dataset.id,estado:r.querySelector('.sel')?.dataset.st,observacion:r.querySelector('.obs').value.trim()}))
+ };
+ let same=q.findIndex(x=>x.date===item.date&&x.schedule?.course_id===item.schedule.course_id&&Number(x.schedule?.periodo)===Number(item.schedule.periodo)&&x.schedule?.asignatura===item.schedule.asignatura);
+ if(same>=0)q[same]=item;else q.push(item);
+ setOfflineQueue(q);
+ toast('No se pudo confirmar la sincronización. La asistencia quedó protegida en este teléfono y se reintentará automáticamente.',true)
+}
+async function retryOfflineQueue(showMessages=true){
+ if(!sb||!navigator.onLine)return false;
+ let q=getOfflineQueue();
+ if(!q.length){updateQueueIndicator();return true}
+ if(showMessages)toast(`Sincronizando ${q.length} registro${q.length===1?'':'s'} pendiente${q.length===1?'':'s'}…`);
+ let remaining=[],ok=0;
+ for(let item of q){
+  try{
+   let s=item.schedule||{};
+   if(!s.course_id||!s.teacher_id||!item.date||!s.periodo||!s.asignatura||!Array.isArray(item.items)||!item.items.length){remaining.push(item);continue}
+   let {data:sess,error:e1}=await sb.from('attendance_sessions').upsert({
+    course_id:s.course_id,teacher_id:s.teacher_id,fecha:item.date,periodo:s.periodo,asignatura:s.asignatura,created_by:profile.id
+   },{onConflict:'course_id,fecha,periodo,asignatura'}).select().single();
+   if(e1||!sess){remaining.push(item);continue}
+   let payload=item.items.filter(x=>x.student_id&&x.estado).map(x=>({session_id:sess.id,student_id:x.student_id,estado:x.estado,observacion:x.observacion||''}));
+   if(!payload.length){remaining.push(item);continue}
+   let {error:e2}=await sb.from('attendance').upsert(payload,{onConflict:'session_id,student_id'});
+   if(e2){remaining.push(item);continue}
+   let {count,error:e3}=await sb.from('attendance').select('id',{count:'exact',head:true}).eq('session_id',sess.id);
+   if(e3||Number(count)!==payload.length){remaining.push(item);continue}
+   ok++;
+  }catch(e){remaining.push(item)}
+ }
+ setOfflineQueue(remaining);
+ if(showMessages){
+  if(ok&&remaining.length)toast(`✓ ${ok} recuperado${ok===1?'':'s'}. Aún quedan ${remaining.length} pendiente${remaining.length===1?'':'s'}.`,true);
+  else if(ok)toast(`✓ ${ok} asistencia${ok===1?'':'s'} recuperada${ok===1?'':'s'} y confirmada${ok===1?'':'s'} en Supabase.`);
+  else if(remaining.length)toast(`No se pudieron sincronizar todavía ${remaining.length} registro${remaining.length===1?'':'s'}. Permanecen protegidos en este teléfono.`,true);
+ }
+ if(ok){await loadToday();await loadHistory()}
+ return remaining.length===0
+}
 async function loadHistory(){if(!profile)return;let q=sb.from('attendance_sessions').select('id,fecha,periodo,asignatura,course_id,teacher_id,created_by,created_at,courses(nombre,jornada)').order('fecha',{ascending:false}).order('periodo',{ascending:false}).limit(100);if(profile.rol!=='ADMIN'&&teacher)q=q.eq('teacher_id',teacher.id);else q=q.eq('created_by',profile.id);let {data,error}=await q;if(error){$('#historyList').innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}$('#historyList').innerHTML=`<div class="row" style="margin-bottom:10px"><input id="histDate" type="date" class="obs grow" style="margin:0"><input id="histSearch" class="obs grow" style="margin:0" placeholder="Buscar curso o asignatura"></div><div id="histRows"></div>`;let render=()=>{let date=$('#histDate').value,txt=($('#histSearch').value||'').toUpperCase();let a=(data||[]).filter(x=>(!date||x.fecha===date)&&(!txt||`${x.courses?.nombre||''} ${x.asignatura||''}`.toUpperCase().includes(txt)));$('#histRows').innerHTML=a.map(x=>`<div class="listitem row"><div class="grow"><b>${x.fecha} · ${esc(x.courses?.nombre||'')}</b><div class="muted">${esc(x.asignatura)} · ${esc(x.courses?.jornada||'')} · período ${x.periodo||'-'}</div></div><button data-hdetail="${x.id}">Ver detalle</button></div>`).join('')||'<p class="muted">Sin registros para este filtro.</p>';$$('[data-hdetail]').forEach(b=>b.onclick=()=>showSessionDetail(b.dataset.hdetail,'#histRows'))};$('#histDate').onchange=render;$('#histSearch').oninput=render;render()}
 async function showSessionDetail(sessionId,target='#histRows'){let {data:sess,error:e1}=await sb.from('attendance_sessions').select('*,courses(nombre,jornada),teachers(nombre)').eq('id',sessionId).single();if(e1){toast(e1.message,true);return}let {data:marks,error:e2}=await sb.from('attendance').select('estado,observacion,students(nombre,cedula)').eq('session_id',sessionId);if(e2){toast(e2.message,true);return}let c=x=>(marks||[]).filter(m=>m.estado===x).length;let el=$(target);el.innerHTML=`<button id="closeDetail">← Volver</button><div class="card" style="margin-top:10px"><h3>${esc(sess.courses?.nombre||'')} · ${esc(sess.asignatura)}</h3><div class="muted">${sess.fecha} · ${esc(sess.courses?.jornada||'')} · período ${sess.periodo} · ${esc(sess.teachers?.nombre||'')}</div><div class="stats"><div class="stat"><b>${c('P')}</b>P</div><div class="stat"><b>${c('F')}</b>F</div><div class="stat"><b>${c('A')}</b>A</div><div class="stat"><b>${c('J')}</b>J</div></div><div class="tablewrap"><table class="report-table"><thead><tr><th>Estudiante</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${(marks||[]).sort((a,b)=>(a.students?.nombre||'').localeCompare(b.students?.nombre||'')).map(m=>`<tr><td>${esc(m.students?.nombre||'')}<div class="muted tiny">${esc(m.students?.cedula||'')}</div></td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')}</tbody></table></div></div>`;$('#closeDetail').onclick=()=>loadHistory()}
 $$('.tab').forEach(b=>b.onclick=()=>{let id=b.dataset.tab;$$('.tab').forEach(x=>x.classList.toggle('active',x===b));['hoy','historial','admin'].forEach(x=>$('#'+x).classList.toggle('hide',x!==id));if(id==='admin')showStudents()});
@@ -171,6 +226,6 @@ async function saveAdminAttendance(){
 
 let toastTimer=null;function toast(msg,isError=false){let t=$('#toast');if(!t)return;t.textContent=msg;t.classList.toggle('error',!!isError);t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3200)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
-window.addEventListener('online',()=>{$('#sync').textContent='● conectado'});window.addEventListener('offline',()=>{$('#sync').textContent='● sin conexión'});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
+$('#sync')?.addEventListener('click',()=>retryOfflineQueue(true));window.addEventListener('online',async()=>{await updateQueueIndicator();await retryOfflineQueue(true)});window.addEventListener('offline',updateQueueIndicator);if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
 if(sb)sb.auth.getUser().then(({data})=>{if(data.user)boot(data.user)});
 </script></body></html>
