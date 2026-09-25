@@ -2,6 +2,22 @@
 :root{font-family:Arial,sans-serif;color:#172033;background:#f4f6f9}*{box-sizing:border-box}body{margin:0}.hide{display:none!important}header{background:#173f6b;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:20}header img{width:54px;height:54px;object-fit:contain;background:#fff;border-radius:12px;padding:3px}header h1{font-size:20px;margin:0}header p{margin:3px 0 0;opacity:.8;font-size:13px}.sync{margin-left:auto;font-size:12px;background:#fff2;padding:8px;border-radius:99px}.tabs{display:grid;grid-template-columns:repeat(4,1fr);background:#fff;position:sticky;top:82px;z-index:19;border-bottom:1px solid #ddd}.tab{padding:13px;border:0;background:#fff}.tab.active{font-weight:700;border-bottom:3px solid #173f6b}.wrap{max-width:900px;margin:auto;padding:12px}.card{background:#fff;border-radius:14px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px #0001}.login{max-width:420px;margin:8vh auto}.login img{display:block;width:160px;max-height:160px;object-fit:contain;margin:0 auto 12px}.login h2{text-align:center}.field{display:grid;gap:5px;margin:10px 0}.field input,.field select{padding:12px;border:1px solid #ccd5df;border-radius:10px;font-size:16px}button{font:inherit;border:1px solid #c9d2df;background:#fff;border-radius:10px;padding:11px 13px}.primary{background:#173f6b;color:#fff;border-color:#173f6b}.wide{width:100%}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.grow{flex:1}.classnow{border-left:5px solid #173f6b}.classnow h2{margin:0 0 6px}.muted{color:#667085;font-size:13px}.student{background:#fff;border-radius:14px;padding:13px;margin:9px 0}.student b{display:block;font-size:16px;margin-bottom:9px}.status{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}.status button{min-height:48px;font-size:17px;font-weight:700}.status button.sel{background:#173f6b;color:#fff}.obs{width:100%;padding:10px;margin-top:8px;border:1px solid #d4d9e1;border-radius:9px}.toolbar{position:sticky;bottom:0;background:#f4f6f9ee;padding:8px 0}.admin-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.pill{padding:5px 8px;border-radius:99px;background:#eef3f8;font-size:12px}.danger{color:#a00000}.notice{padding:10px;border-radius:10px;background:#fff4d6;margin:10px 0}.ok{background:#e8f7ed}.listitem{padding:10px 0;border-bottom:1px solid #eee}.listitem:last-child{border:0}.attbadge{display:inline-block;margin-top:6px;padding:4px 8px;border-radius:999px;font-size:12px;font-weight:700}.attbadge.pending{background:#fff4d6;color:#7a5200}.attbadge.done{background:#e8f7ed;color:#176b36}.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:#173f6b;color:#fff;padding:12px 18px;border-radius:12px;box-shadow:0 8px 28px #0003;z-index:9999;opacity:0;pointer-events:none;transition:.22s;max-width:calc(100% - 28px);text-align:center;font-weight:700}.toast.show{opacity:1;transform:translate(-50%,0)}.toast.error{background:#9f1c1c}.report-filters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.report-filters label{display:grid;gap:5px;font-size:12px;color:#667085}.report-filters input,.report-filters select{padding:10px;border:1px solid #ccd5df;border-radius:9px;background:#fff;min-width:0}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}.stat{background:#f7f9fc;border:1px solid #e3e8ef;border-radius:12px;padding:10px;text-align:center}.stat b{display:block;font-size:22px}.report-table{width:100%;border-collapse:collapse;font-size:13px}.report-table th,.report-table td{padding:8px;border-bottom:1px solid #e7eaf0;text-align:left;vertical-align:top}.tablewrap{overflow:auto}.tiny{font-size:11px}.statusP,.statusF,.statusA,.statusJ{display:inline-block;min-width:28px;text-align:center;padding:3px 6px;border-radius:999px;font-weight:700}.statusP{background:#e8f7ed}.statusF{background:#fdeaea}.statusA{background:#fff4d6}.statusJ{background:#e8eefc}@media(max-width:620px){.report-filters{grid-template-columns:1fr}.stats{grid-template-columns:repeat(2,1fr)}}button:disabled{opacity:.55;cursor:not-allowed}@media(min-width:700px){.admin-grid{grid-template-columns:repeat(4,1fr)}header{border-radius:0 0 16px 16px}.tabs{top:82px}}
 
 .directive-hero{background:#173f6b;color:#fff;border-radius:16px;padding:18px;margin-bottom:12px}.directive-hero h3{margin:0 0 5px;font-size:22px}.directive-hero .muted{color:#e5eef8}.directive-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin:12px 0}.directive-stat{background:#fff;border:1px solid #e1e7ef;border-radius:13px;padding:13px;text-align:center}.directive-stat b{display:block;font-size:25px;color:#173f6b}.directive-stat span{font-size:12px;color:#667085}@media(max-width:620px){.directive-stats{grid-template-columns:repeat(2,1fr)}}
+
+.directive-quick{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0}
+.directive-quick button.active{background:#173f6b;color:#fff;border-color:#173f6b}
+.directive-mobile-list{display:none}
+.directive-student-card{background:#fff;border:1px solid #dce5ef;border-radius:14px;padding:14px;margin:9px 0}
+.directive-student-card h4{margin:0 0 4px;color:#10233d;font-size:16px}
+.directive-student-meta{color:#667085;font-size:12px;margin-bottom:10px}
+.directive-mini-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin:9px 0}
+.directive-mini{border-radius:10px;background:#f5f7fa;padding:8px 10px;font-size:13px}
+.directive-mini b{font-size:18px;color:#173f6b;margin-left:4px}
+.directive-view{width:100%;margin-top:7px}
+@media(max-width:700px){
+ .directive-desktop-table{display:none}
+ .directive-mobile-list{display:block}
+ .directive-hero{margin-left:0;margin-right:0}
+}
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -239,11 +255,13 @@ async function showReportSessionDetail(id){let box=$('#reportResults');let {data
 async function showDirectiveFollowup(){
  if(profile?.rol!=='ADMIN'){toast('Disponible únicamente para directivos.',true);return}
  let box=$('#adminBody'),today=ecuadorDate(),first=today.slice(0,8)+'01';
- let [{data:courses,error:ce},{data:teachers,error:te}]=await Promise.all([
+ let [{data:courses,error:ce},{data:teachers,error:te},{count:activeStudents,error:ae}]=await Promise.all([
   sb.from('courses').select('id,nombre,jornada').eq('activo',true),
-  sb.from('teachers').select('id,nombre').eq('activo',true).order('nombre')
+  sb.from('teachers').select('id,nombre').eq('activo',true).order('nombre'),
+  sb.from('students').select('id',{count:'exact',head:true}).eq('activo',true)
  ]);
- if(ce||te){box.innerHTML='<div class="notice">'+esc((ce||te).message)+'</div>';return}
+ window.__directiveActiveStudents=activeStudents||0;
+ if(ce||te||ae){box.innerHTML='<div class="notice">'+esc((ce||te||ae).message)+'</div>';return}
  const order=['INICIAL I','INICIAL II','PRIMERO EGB','SEGUNDO EGB','TERCERO EGB','CUARTO EGB','QUINTO EGB','SEXTO EGB','SÉPTIMO EGB','SEPTIMO EGB','OCTAVO EGB','NOVENO EGB','DÉCIMO EGB','DECIMO EGB','PRIMERO BGU','SEGUNDO BGU','TERCERO BGU'];
  const norm=s=>String(s||'').trim().toUpperCase(),rank=n=>{let i=order.indexOf(norm(n));return i<0?999:i};
  courses=(courses||[]).sort((a,b)=>norm(a.jornada).localeCompare(norm(b.jornada),'es')||rank(a.nombre)-rank(b.nombre));
@@ -278,11 +296,54 @@ async function runDirectiveFollowup(){
  notices.forEach(n=>{let p=get(n.student_id,n.students?.nombre,n.students?.cedula,n.courses?.nombre,n.courses?.jornada);p.nov++});
  let rows=[...people.values()].sort((a,b)=>(b.F+b.A+b.nov)-(a.F+a.A+a.nov)||a.n.localeCompare(b.n,'es'));
  const count=x=>marks.filter(m=>m.estado===x).length,nt=x=>notices.filter(n=>n.tipo===x).length;
- box.innerHTML=`<div class="directive-stats"><div class="directive-stat"><b>${people.size}</b><span>Estudiantes con registros</span></div><div class="directive-stat"><b>${sessions.length}</b><span>Clases registradas</span></div><div class="directive-stat"><b>${count('F')}</b><span>Faltas</span></div><div class="directive-stat"><b>${count('A')}</b><span>Atrasos</span></div></div>
- <div class="card"><h3>📝 Novedades pedagógicas</h3><div class="directive-stats"><div class="directive-stat"><b>${nt('ACADEMICA')}</b><span>Académicas</span></div><div class="directive-stat"><b>${nt('CONVIVENCIA')}</b><span>Convivencia</span></div><div class="directive-stat"><b>${nt('UNIFORME')}</b><span>Uniforme</span></div><div class="directive-stat"><b>${nt('FELICITACION')}</b><span>Felicitaciones</span></div></div><div class="muted">${nt('INFORMACION')} de información · ${notices.length} novedades en total</div></div>
- <div class="card"><h3>👥 Seguimiento por estudiante</h3><p class="muted">Los registros se organizan para facilitar la revisión directiva; el sistema no asigna sanciones ni valoraciones automáticas.</p><div class="tablewrap"><table class="report-table"><thead><tr><th>Estudiante</th><th>Curso</th><th>P</th><th>F</th><th>A</th><th>J</th><th>Novedades</th><th></th></tr></thead><tbody>${rows.map(p=>`<tr><td><b>${esc(p.n)}</b><div class="muted tiny">${esc(p.c)}</div></td><td>${esc(p.course)}<div class="muted tiny">${esc(p.jornada)}</div></td><td>${p.P}</td><td>${p.F}</td><td>${p.A}</td><td>${p.J}</td><td>${p.nov}</td><td><button data-dstudent="${p.id}">Ver</button></td></tr>`).join('')||'<tr><td colspan="8">Sin registros.</td></tr>'}</tbody></table></div></div>`;
- $$('[data-dstudent]').forEach(b=>b.onclick=()=>showDirectiveStudent(b.dataset.dstudent,from,to))
+ window.__directiveRows=rows;
+ window.__directiveRange={from,to};
+ window.__directiveFilter='all';
+ const justified=count('J');
+ box.innerHTML=`<div class="directive-stats">
+ <div class="directive-stat"><b>${window.__directiveActiveStudents||0}</b><span>Matrícula activa institucional</span></div>
+ <div class="directive-stat"><b>${people.size}</b><span>Estudiantes con registros en el período</span></div>
+ <div class="directive-stat"><b>${sessions.length}</b><span>Clases registradas</span></div>
+ <div class="directive-stat"><b>${count('F')}</b><span>Faltas</span></div>
+ <div class="directive-stat"><b>${count('A')}</b><span>Atrasos</span></div>
+ <div class="directive-stat"><b>${justified}</b><span>Justificadas</span></div>
+ </div>
+ <div class="card"><h3>📝 Novedades pedagógicas</h3><div class="directive-stats">
+ <div class="directive-stat"><b>${nt('ACADEMICA')}</b><span>Académicas</span></div>
+ <div class="directive-stat"><b>${nt('CONVIVENCIA')}</b><span>Convivencia</span></div>
+ <div class="directive-stat"><b>${nt('UNIFORME')}</b><span>Uniforme</span></div>
+ <div class="directive-stat"><b>${nt('FELICITACION')}</b><span>Felicitaciones</span></div>
+ </div><div class="muted">${nt('INFORMACION')} de información · ${notices.length} novedades en total</div></div>
+ <div class="card"><h3>👥 Seguimiento por estudiante</h3>
+ <p class="muted">Consulta de registros para facilitar el seguimiento directivo. Los indicadores no constituyen sanciones ni valoraciones automáticas.</p>
+ <div class="directive-quick">
+  <button class="active" data-dfilter="all">Todos</button>
+  <button data-dfilter="faltas">Con faltas</button>
+  <button data-dfilter="atrasos">Con atrasos</button>
+  <button data-dfilter="novedades">Con novedades</button>
+ </div>
+ <div id="directiveStudentList"></div></div>`;
+ renderDirectiveStudents();
+ $$('[data-dfilter]').forEach(b=>b.onclick=()=>{
+   window.__directiveFilter=b.dataset.dfilter;
+   $$('[data-dfilter]').forEach(x=>x.classList.toggle('active',x===b));
+   renderDirectiveStudents();
+ })
 }
+
+function renderDirectiveStudents(){
+ let host=$('#directiveStudentList'); if(!host)return;
+ let rows=window.__directiveRows||[],f=window.__directiveFilter||'all';
+ if(f==='faltas')rows=rows.filter(x=>x.F>0);
+ if(f==='atrasos')rows=rows.filter(x=>x.A>0);
+ if(f==='novedades')rows=rows.filter(x=>x.nov>0);
+ let empty='<div class="muted" style="padding:12px 0">No existen estudiantes para este filtro.</div>';
+ let desktop=rows.length?`<div class="tablewrap directive-desktop-table"><table class="report-table"><thead><tr><th>Estudiante</th><th>Curso</th><th>P</th><th>F</th><th>A</th><th>J</th><th>Novedades</th><th></th></tr></thead><tbody>${rows.map(p=>`<tr><td><b>${esc(p.n)}</b><div class="muted tiny">${esc(p.c)}</div></td><td>${esc(p.course)}<div class="muted tiny">${esc(p.jornada)}</div></td><td>${p.P}</td><td>${p.F}</td><td>${p.A}</td><td>${p.J}</td><td>${p.nov}</td><td><button data-dstudent="${p.id}">Ver</button></td></tr>`).join('')}</tbody></table></div>`:empty;
+ let mobile=rows.length?`<div class="directive-mobile-list">${rows.map(p=>`<div class="directive-student-card"><h4>${esc(p.n)}</h4><div class="directive-student-meta">${esc(p.course)} · ${esc(p.jornada)}${p.c?` · ${esc(p.c)}`:''}</div><div class="directive-mini-stats"><div class="directive-mini">🟢 Presentes <b>${p.P}</b></div><div class="directive-mini">🔴 Faltas <b>${p.F}</b></div><div class="directive-mini">🟠 Atrasos <b>${p.A}</b></div><div class="directive-mini">🔵 Justificadas <b>${p.J}</b></div></div><div class="directive-mini">📝 Novedades <b>${p.nov}</b></div><button class="primary directive-view" data-dstudent="${p.id}">Ver historial completo →</button></div>`).join('')}</div>`:'';
+ host.innerHTML=desktop+mobile;
+ $$('[data-dstudent]').forEach(b=>b.onclick=()=>showDirectiveStudent(b.dataset.dstudent,window.__directiveRange.from,window.__directiveRange.to))
+}
+
 async function showDirectiveStudent(id,from,to){
  let box=$('#directiveResults');box.innerHTML='<div class="card">Cargando historial…</div>';
  let sr=await sb.from('students').select('id,nombre,cedula,course_id,courses(nombre,jornada)').eq('id',id).single();if(sr.error){box.innerHTML='<div class="notice">'+esc(sr.error.message)+'</div>';return}let st=sr.data;
