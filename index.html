@@ -32,6 +32,17 @@
  .directive-detail-list{display:block}
 }
 
+
+.directive-course-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:12px}
+.directive-course-card{border:1px solid #dce5ef;border-radius:15px;padding:14px;background:#fff}
+.directive-course-card h4{margin:0;color:#10233d;font-size:17px}
+.directive-course-shift{font-size:12px;color:#667085;margin-top:3px}
+.directive-course-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px}
+.directive-course-mini{background:#f7f9fc;border-radius:10px;padding:8px 4px;text-align:center;color:#667085;font-size:11px}
+.directive-course-mini b{display:block;color:#174d7f;font-size:18px;margin-bottom:2px}
+.directive-course-card button{width:100%;margin-top:11px}
+@media(max-width:700px){.directive-course-grid{grid-template-columns:1fr}}
+
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -308,12 +319,35 @@ async function runDirectiveFollowup(){
  const get=(id,n,c,course,jornada)=>{if(!people.has(id))people.set(id,{id,n:n||'',c:c||'',course:course||'',jornada:jornada||'',P:0,F:0,A:0,J:0,nov:0});return people.get(id)};
  marks.forEach(m=>{let s=smap.get(m.session_id),p=get(m.student_id,m.students?.nombre,m.students?.cedula,s?.courses?.nombre,s?.courses?.jornada);if(['P','F','A','J'].includes(m.estado))p[m.estado]++});
  notices.forEach(n=>{let p=get(n.student_id,n.students?.nombre,n.students?.cedula,n.courses?.nombre,n.courses?.jornada);p.nov++});
+ let activeCourseStudents=[];
+ let activeCourseIds=[...new Set([
+   ...sessions.map(s=>s.course_id).filter(Boolean),
+   ...notices.map(n=>n.course_id).filter(Boolean)
+ ])];
+ if(cid&&!activeCourseIds.includes(cid))activeCourseIds.push(cid);
+ if(activeCourseIds.length){
+   let ar=await sb.from('students').select('id,course_id').eq('estado','ACTIVO').in('course_id',activeCourseIds);
+   if(ar.error){box.innerHTML='<div class="notice">'+esc(ar.error.message)+'</div>';return}
+   activeCourseStudents=ar.data||[];
+ }
  let rows=[...people.values()].sort((a,b)=>(b.F+b.A+b.nov)-(a.F+a.A+a.nov)||a.n.localeCompare(b.n,'es'));
  const count=x=>marks.filter(m=>m.estado===x).length,nt=x=>notices.filter(n=>n.tipo===x).length;
  window.__directiveRows=rows;
  window.__directiveRange={from,to};
  window.__directiveFilter='all';
  const justified=count('J');
+ const courseMap=new Map();
+ const ensureCourse=(id,name,jornada)=>{
+   if(!id)return null;
+   if(!courseMap.has(id))courseMap.set(id,{id,name:name||'',jornada:jornada||'',students:0,classes:0,F:0,A:0,J:0,nov:0});
+   return courseMap.get(id);
+ };
+ sessions.forEach(s=>{let x=ensureCourse(s.course_id,s.courses?.nombre,s.courses?.jornada);if(x)x.classes++});
+ activeCourseStudents.forEach(s=>{let x=courseMap.get(s.course_id);if(x)x.students++});
+ marks.forEach(m=>{let s=smap.get(m.session_id),x=s?courseMap.get(s.course_id):null;if(x&&['F','A','J'].includes(m.estado))x[m.estado]++});
+ notices.forEach(n=>{let x=ensureCourse(n.course_id,n.courses?.nombre,n.courses?.jornada);if(x)x.nov++});
+ let courseRows=[...courseMap.values()].sort((a,b)=>String(a.jornada).localeCompare(String(b.jornada),'es')||String(a.name).localeCompare(String(b.name),'es',{numeric:true}));
+ window.__directiveCourseRows=courseRows;
  box.innerHTML=`<div class="directive-stats">
  <div class="directive-stat"><b>${window.__directiveActiveStudents||0}</b><span>Matrícula activa institucional</span></div>
  <div class="directive-stat"><b>${people.size}</b><span>Estudiantes con registros en el período</span></div>
@@ -328,6 +362,21 @@ async function runDirectiveFollowup(){
  <div class="directive-stat"><b>${nt('UNIFORME')}</b><span>Uniforme</span></div>
  <div class="directive-stat"><b>${nt('FELICITACION')}</b><span>Felicitaciones</span></div>
  </div><div class="muted">${nt('INFORMACION')} de información · ${notices.length} novedades en total</div></div>
+ <div class="card"><h3>🏫 Seguimiento por curso</h3>
+ <p class="muted">Resumen de matrícula y registros del período según los filtros seleccionados.</p>
+ <div class="directive-course-grid">${courseRows.length?courseRows.map(r=>`<div class="directive-course-card">
+   <h4>${esc(r.name)}</h4><div class="directive-course-shift">${esc(r.jornada)}</div>
+   <div class="directive-course-stats">
+    <div class="directive-course-mini"><b>${r.students}</b>Estudiantes</div>
+    <div class="directive-course-mini"><b>${r.classes}</b>Clases</div>
+    <div class="directive-course-mini"><b>${r.F}</b>Faltas</div>
+    <div class="directive-course-mini"><b>${r.A}</b>Atrasos</div>
+    <div class="directive-course-mini"><b>${r.J}</b>Justificadas</div>
+    <div class="directive-course-mini"><b>${r.nov}</b>Novedades</div>
+   </div>
+   <button data-dcourse="${r.id}">Ver estudiantes →</button>
+ </div>`).join(''):'<div class="muted">No existen cursos con información para los filtros seleccionados.</div>'}</div>
+ </div>
  <div class="card"><h3>👥 Seguimiento por estudiante</h3>
  <p class="muted">Consulta de registros para facilitar el seguimiento directivo. Los indicadores no constituyen sanciones ni valoraciones automáticas.</p>
  <div class="directive-quick">
@@ -338,6 +387,10 @@ async function runDirectiveFollowup(){
  </div>
  <div id="directiveStudentList"></div></div>`;
  renderDirectiveStudents();
+ $$('[data-dcourse]').forEach(b=>b.onclick=()=>{
+   $('#dCourse').value=b.dataset.dcourse;
+   runDirectiveFollowup().then(()=>setTimeout(()=>$('#directiveStudentList')?.scrollIntoView({behavior:'smooth',block:'start'}),100));
+ });
  $$('[data-dfilter]').forEach(b=>b.onclick=()=>{
    window.__directiveFilter=b.dataset.dfilter;
    $$('[data-dfilter]').forEach(x=>x.classList.toggle('active',x===b));
