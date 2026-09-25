@@ -18,6 +18,20 @@
  .directive-mobile-list{display:block}
  .directive-hero{margin-left:0;margin-right:0}
 }
+
+.directive-detail-list{display:none}
+.directive-detail-card{background:#fff;border:1px solid #dce5ef;border-radius:13px;padding:12px;margin:9px 0}
+.directive-detail-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.directive-detail-date{font-weight:700;color:#10233d}
+.directive-detail-subject{font-weight:700;font-size:15px;margin:8px 0 3px}
+.directive-detail-meta{color:#667085;font-size:12px;line-height:1.4}
+.directive-detail-obs{margin-top:8px;padding-top:8px;border-top:1px solid #edf0f4;font-size:13px}
+.directive-day-summary{margin-top:10px;padding:10px 12px;border-radius:11px;background:#f7f9fc;border:1px solid #e3e8ef;color:#334155;font-size:13px}
+@media(max-width:700px){
+ .directive-detail-table{display:none}
+ .directive-detail-list{display:block}
+}
+
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -346,16 +360,64 @@ function renderDirectiveStudents(){
 
 async function showDirectiveStudent(id,from,to){
  let box=$('#directiveResults');box.innerHTML='<div class="card">Cargando historial…</div>';
- let sr=await sb.from('students').select('id,nombre,cedula,course_id,courses(nombre,jornada)').eq('id',id).single();if(sr.error){box.innerHTML='<div class="notice">'+esc(sr.error.message)+'</div>';return}let st=sr.data;
- let ss=await sb.from('attendance_sessions').select('id,fecha,periodo,asignatura,teachers(nombre)').eq('course_id',st.course_id).gte('fecha',from).lte('fecha',to).order('fecha',{ascending:false});if(ss.error){box.innerHTML='<div class="notice">'+esc(ss.error.message)+'</div>';return}
- let ids=(ss.data||[]).map(x=>x.id),marks=[];if(ids.length){let mr=await sb.from('attendance').select('session_id,estado,observacion').eq('student_id',id).in('session_id',ids);if(mr.error){box.innerHTML='<div class="notice">'+esc(mr.error.message)+'</div>';return}marks=mr.data||[]}
- let mp=new Map((ss.data||[]).map(x=>[x.id,x]));let att=marks.map(m=>({...m,s:mp.get(m.session_id)})).filter(x=>x.s);
- let nn=await sb.from('student_notices').select('fecha,tipo,motivo,observacion,asignatura,teachers(nombre)').eq('student_id',id).eq('activo',true).gte('fecha',from).lte('fecha',to).order('fecha',{ascending:false});if(nn.error){box.innerHTML='<div class="notice">'+esc(nn.error.message)+'</div>';return}
+ let sr=await sb.from('students').select('id,nombre,cedula,course_id,courses(nombre,jornada)').eq('id',id).single();
+ if(sr.error){box.innerHTML='<div class="notice">'+esc(sr.error.message)+'</div>';return}
+ let st=sr.data;
+
+ let ss=await sb.from('attendance_sessions')
+  .select('id,fecha,periodo,asignatura,teachers(nombre)')
+  .eq('course_id',st.course_id)
+  .gte('fecha',from).lte('fecha',to)
+  .order('fecha',{ascending:false})
+  .order('periodo',{ascending:false});
+ if(ss.error){box.innerHTML='<div class="notice">'+esc(ss.error.message)+'</div>';return}
+
+ let ids=(ss.data||[]).map(x=>x.id),marks=[];
+ if(ids.length){
+  let mr=await sb.from('attendance').select('session_id,estado,observacion').eq('student_id',id).in('session_id',ids);
+  if(mr.error){box.innerHTML='<div class="notice">'+esc(mr.error.message)+'</div>';return}
+  marks=mr.data||[];
+ }
+ let mp=new Map((ss.data||[]).map(x=>[x.id,x]));
+ let att=marks.map(m=>({...m,s:mp.get(m.session_id)})).filter(x=>x.s)
+  .sort((a,b)=>String(b.s.fecha).localeCompare(String(a.s.fecha))||Number(b.s.periodo||0)-Number(a.s.periodo||0));
+
+ let nn=await sb.from('student_notices')
+  .select('fecha,tipo,motivo,observacion,asignatura,teachers(nombre)')
+  .eq('student_id',id).eq('activo',true)
+  .gte('fecha',from).lte('fecha',to)
+  .order('fecha',{ascending:false});
+ if(nn.error){box.innerHTML='<div class="notice">'+esc(nn.error.message)+'</div>';return}
+
  let c=x=>att.filter(m=>m.estado===x).length;
- box.innerHTML=`<button id="dBack">← Volver al seguimiento</button><div class="card" style="margin-top:10px"><h2>${esc(st.nombre)}</h2><div class="muted">${esc(st.courses?.nombre||'')} · ${esc(st.courses?.jornada||'')} · ${esc(st.cedula||'')}</div><div class="stats"><div class="stat"><b>${c('P')}</b>Presentes</div><div class="stat"><b>${c('F')}</b>Faltas</div><div class="stat"><b>${c('A')}</b>Atrasos</div><div class="stat"><b>${c('J')}</b>Justificadas</div></div></div>
- <div class="card"><h3>📋 Historial de asistencia</h3><div class="tablewrap"><table class="report-table"><thead><tr><th>Fecha</th><th>Asignatura</th><th>Docente</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${att.map(m=>`<tr><td>${m.s.fecha}</td><td>${esc(m.s.asignatura)}<div class="muted tiny">Período ${m.s.periodo}</div></td><td>${esc(m.s.teachers?.nombre||'')}</td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin registros.</td></tr>'}</tbody></table></div></div>
- <div class="card"><h3>📝 Historial de novedades</h3><div class="tablewrap"><table class="report-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Asignatura / docente</th><th>Observación</th></tr></thead><tbody>${(nn.data||[]).map(n=>`<tr><td>${n.fecha}</td><td>${esc(n.tipo)}</td><td>${esc(n.motivo)}</td><td>${esc(n.asignatura||'')}<div class="muted tiny">${esc(n.teachers?.nombre||'')}</div></td><td>${esc(n.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin novedades.</td></tr>'}</tbody></table></div></div>`;
- $('#dBack').onclick=runDirectiveFollowup
+ let absenceDays=new Set(att.filter(m=>m.estado==='F').map(m=>m.s.fecha)).size;
+ let lateDays=new Set(att.filter(m=>m.estado==='A').map(m=>m.s.fecha)).size;
+ let statusLabel={P:'Presente',F:'Falta',A:'Atraso',J:'Justificada'};
+
+ let attDesktop=`<div class="tablewrap directive-detail-table"><table class="report-table"><thead><tr><th>Fecha</th><th>Asignatura</th><th>Docente</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${att.map(m=>`<tr><td>${m.s.fecha}</td><td>${esc(m.s.asignatura)}<div class="muted tiny">Período ${m.s.periodo}</div></td><td>${esc(m.s.teachers?.nombre||'')}</td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin registros.</td></tr>'}</tbody></table></div>`;
+
+ let attMobile=att.length?`<div class="directive-detail-list">${att.map(m=>`<div class="directive-detail-card"><div class="directive-detail-head"><div class="directive-detail-date">${m.s.fecha}</div><span class="status${m.estado}">${esc(statusLabel[m.estado]||m.estado)}</span></div><div class="directive-detail-subject">${esc(m.s.asignatura||'')}</div><div class="directive-detail-meta">Período ${m.s.periodo||'-'} · ${esc(m.s.teachers?.nombre||'')}</div>${m.observacion?`<div class="directive-detail-obs"><b>Observación:</b> ${esc(m.observacion)}</div>`:''}</div>`).join('')}</div>`:'<div class="muted">Sin registros.</div>';
+
+ let noticeRows=nn.data||[];
+ let novDesktop=`<div class="tablewrap directive-detail-table"><table class="report-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Asignatura / docente</th><th>Observación</th></tr></thead><tbody>${noticeRows.map(n=>`<tr><td>${n.fecha}</td><td>${esc(n.tipo)}</td><td>${esc(n.motivo)}</td><td>${esc(n.asignatura||'')}<div class="muted tiny">${esc(n.teachers?.nombre||'')}</div></td><td>${esc(n.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin novedades.</td></tr>'}</tbody></table></div>`;
+
+ let novMobile=noticeRows.length?`<div class="directive-detail-list">${noticeRows.map(n=>`<div class="directive-detail-card"><div class="directive-detail-head"><div class="directive-detail-date">${n.fecha}</div><span class="pill">${esc(n.tipo)}</span></div><div class="directive-detail-subject">${esc(n.motivo||'')}</div><div class="directive-detail-meta">${esc(n.asignatura||'Sin asignatura')}${n.teachers?.nombre?` · ${esc(n.teachers.nombre)}`:''}</div>${n.observacion?`<div class="directive-detail-obs">${esc(n.observacion)}</div>`:''}</div>`).join('')}</div>`:'<div class="muted">Sin novedades.</div>';
+
+ box.innerHTML=`<button id="dBack">← Volver al seguimiento</button>
+ <div class="card" style="margin-top:10px">
+  <h2>${esc(st.nombre)}</h2>
+  <div class="muted">${esc(st.courses?.nombre||'')} · ${esc(st.courses?.jornada||'')} · ${esc(st.cedula||'')}</div>
+  <div class="stats">
+   <div class="stat"><b>${c('P')}</b>Presentes</div>
+   <div class="stat"><b>${c('F')}</b>Faltas</div>
+   <div class="stat"><b>${c('A')}</b>Atrasos</div>
+   <div class="stat"><b>${c('J')}</b>Justificadas</div>
+  </div>
+  <div class="directive-day-summary"><b>Resumen por días:</b> ${absenceDays} día${absenceDays===1?'':'s'} con falta · ${lateDays} día${lateDays===1?'':'s'} con atraso. <span class="muted">Las cifras superiores corresponden a períodos registrados.</span></div>
+ </div>
+ <div class="card"><h3>📋 Historial de asistencia</h3>${attDesktop}${attMobile}</div>
+ <div class="card"><h3>📝 Historial de novedades</h3>${novDesktop}${novMobile}</div>`;
+ $('#dBack').onclick=runDirectiveFollowup;
 }
 
 async function showAdminAttendance(){
