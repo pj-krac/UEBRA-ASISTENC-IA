@@ -258,7 +258,7 @@ async function showDirectiveFollowup(){
  let [{data:courses,error:ce},{data:teachers,error:te},{count:activeStudents,error:ae}]=await Promise.all([
   sb.from('courses').select('id,nombre,jornada').eq('activo',true),
   sb.from('teachers').select('id,nombre').eq('activo',true).order('nombre'),
-  sb.from('students').select('id',{count:'exact',head:true}).eq('activo',true)
+  sb.from('students').select('id',{count:'exact',head:true}).eq('estado','ACTIVO')
  ]);
  window.__directiveActiveStudents=activeStudents||0;
  if(ce||te||ae){box.innerHTML='<div class="notice">'+esc((ce||te||ae).message)+'</div>';return}
