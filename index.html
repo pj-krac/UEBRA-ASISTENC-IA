@@ -358,6 +358,12 @@ function renderDirectiveStudents(){
  $$('[data-dstudent]').forEach(b=>b.onclick=()=>showDirectiveStudent(b.dataset.dstudent,window.__directiveRange.from,window.__directiveRange.to))
 }
 
+function formatDirectiveDate(v){
+ let s=String(v||'');
+ let m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+ return m?`${m[3]}/${m[2]}/${m[1]}`:s;
+}
+
 async function showDirectiveStudent(id,from,to){
  let box=$('#directiveResults');box.innerHTML='<div class="card">Cargando historial…</div>';
  let sr=await sb.from('students').select('id,nombre,cedula,course_id,courses(nombre,jornada)').eq('id',id).single();
@@ -394,14 +400,14 @@ async function showDirectiveStudent(id,from,to){
  let lateDays=new Set(att.filter(m=>m.estado==='A').map(m=>m.s.fecha)).size;
  let statusLabel={P:'Presente',F:'Falta',A:'Atraso',J:'Justificada'};
 
- let attDesktop=`<div class="tablewrap directive-detail-table"><table class="report-table"><thead><tr><th>Fecha</th><th>Asignatura</th><th>Docente</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${att.map(m=>`<tr><td>${m.s.fecha}</td><td>${esc(m.s.asignatura)}<div class="muted tiny">Período ${m.s.periodo}</div></td><td>${esc(m.s.teachers?.nombre||'')}</td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin registros.</td></tr>'}</tbody></table></div>`;
+ let attDesktop=`<div class="tablewrap directive-detail-table"><table class="report-table"><thead><tr><th>Fecha</th><th>Asignatura</th><th>Docente</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${att.map(m=>`<tr><td>${formatDirectiveDate(m.s.fecha)}</td><td>${esc(m.s.asignatura)}<div class="muted tiny">Período ${m.s.periodo}</div></td><td>${esc(m.s.teachers?.nombre||'')}</td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin registros.</td></tr>'}</tbody></table></div>`;
 
- let attMobile=att.length?`<div class="directive-detail-list">${att.map(m=>`<div class="directive-detail-card"><div class="directive-detail-head"><div class="directive-detail-date">${m.s.fecha}</div><span class="status${m.estado}">${esc(statusLabel[m.estado]||m.estado)}</span></div><div class="directive-detail-subject">${esc(m.s.asignatura||'')}</div><div class="directive-detail-meta">Período ${m.s.periodo||'-'} · ${esc(m.s.teachers?.nombre||'')}</div>${m.observacion?`<div class="directive-detail-obs"><b>Observación:</b> ${esc(m.observacion)}</div>`:''}</div>`).join('')}</div>`:'<div class="muted">Sin registros.</div>';
+ let attMobile=att.length?`<div class="directive-detail-list">${att.map(m=>`<div class="directive-detail-card"><div class="directive-detail-head"><div class="directive-detail-date">${formatDirectiveDate(m.s.fecha)}</div><span class="status${m.estado}">${esc(statusLabel[m.estado]||m.estado)}</span></div><div class="directive-detail-subject">${esc(m.s.asignatura||'')}</div><div class="directive-detail-meta">Período ${m.s.periodo||'-'} · ${esc(m.s.teachers?.nombre||'')}</div>${m.observacion?`<div class="directive-detail-obs"><b>Observación:</b> ${esc(m.observacion)}</div>`:''}</div>`).join('')}</div>`:'<div class="muted">Sin registros.</div>';
 
  let noticeRows=nn.data||[];
- let novDesktop=`<div class="tablewrap directive-detail-table"><table class="report-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Asignatura / docente</th><th>Observación</th></tr></thead><tbody>${noticeRows.map(n=>`<tr><td>${n.fecha}</td><td>${esc(n.tipo)}</td><td>${esc(n.motivo)}</td><td>${esc(n.asignatura||'')}<div class="muted tiny">${esc(n.teachers?.nombre||'')}</div></td><td>${esc(n.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin novedades.</td></tr>'}</tbody></table></div>`;
+ let novDesktop=`<div class="tablewrap directive-detail-table"><table class="report-table"><thead><tr><th>Fecha</th><th>Tipo</th><th>Motivo</th><th>Asignatura / docente</th><th>Observación</th></tr></thead><tbody>${noticeRows.map(n=>`<tr><td>${formatDirectiveDate(n.fecha)}</td><td>${esc(n.tipo)}</td><td>${esc(n.motivo)}</td><td>${esc(n.asignatura||'')}<div class="muted tiny">${esc(n.teachers?.nombre||'')}</div></td><td>${esc(n.observacion||'')}</td></tr>`).join('')||'<tr><td colspan="5">Sin novedades.</td></tr>'}</tbody></table></div>`;
 
- let novMobile=noticeRows.length?`<div class="directive-detail-list">${noticeRows.map(n=>`<div class="directive-detail-card"><div class="directive-detail-head"><div class="directive-detail-date">${n.fecha}</div><span class="pill">${esc(n.tipo)}</span></div><div class="directive-detail-subject">${esc(n.motivo||'')}</div><div class="directive-detail-meta">${esc(n.asignatura||'Sin asignatura')}${n.teachers?.nombre?` · ${esc(n.teachers.nombre)}`:''}</div>${n.observacion?`<div class="directive-detail-obs">${esc(n.observacion)}</div>`:''}</div>`).join('')}</div>`:'<div class="muted">Sin novedades.</div>';
+ let novMobile=noticeRows.length?`<div class="directive-detail-list">${noticeRows.map(n=>`<div class="directive-detail-card"><div class="directive-detail-head"><div class="directive-detail-date">${formatDirectiveDate(n.fecha)}</div><span class="pill">${esc(n.tipo)}</span></div><div class="directive-detail-subject">${esc(n.motivo||'')}</div><div class="directive-detail-meta">${esc(n.asignatura||'Sin asignatura')}${n.teachers?.nombre?` · ${esc(n.teachers.nombre)}`:''}</div>${n.observacion?`<div class="directive-detail-obs">${esc(n.observacion)}</div>`:''}</div>`).join('')}</div>`:'<div class="muted">Sin novedades.</div>';
 
  box.innerHTML=`<button id="dBack">← Volver al seguimiento</button>
  <div class="card" style="margin-top:10px">
