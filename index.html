@@ -344,7 +344,8 @@ async function saveGradeImprovement(item,st,g,imp,withReinforcement){
   student_grade_id:g.id,
   modalidad:withReinforcement?'CON_REFUERZO':'DIRECTA',
   nota_trabajo_refuerzo:withReinforcement?refN:null,
-  nota_evaluacion_mejora:evalN
+  nota_evaluacion_mejora:evalN,
+  created_by:profile.id
  };
  let btn=$('#improveSave');btn.disabled=true;btn.textContent='Guardando…';
  let res;
