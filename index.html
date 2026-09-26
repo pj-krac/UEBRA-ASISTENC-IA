@@ -124,6 +124,21 @@
  .project-metrics{font-size:11px}
 }
 
+
+/* ===== V2.8 · CONSOLIDADO ACADÉMICO ===== */
+.consolidated-controls{display:grid;grid-template-columns:minmax(220px,1fr) auto;gap:10px;align-items:end}
+.consolidated-controls label{display:grid;gap:5px;font-size:12px;color:#667085}
+.consolidated-controls select{padding:10px;border:1px solid #ccd5df;border-radius:9px;background:#fff}
+.consolidated-table-wrap{overflow:auto;border:1px solid #e1e7ef;border-radius:12px;margin-top:12px;max-height:62vh}
+.consolidated-table{border-collapse:collapse;width:max-content;min-width:100%;font-size:12px;background:#fff}
+.consolidated-table th,.consolidated-table td{border:1px solid #e5e7eb;padding:7px 8px;text-align:center;white-space:nowrap}
+.consolidated-table th{background:#f3f6fa;color:#173f6b;position:sticky;top:0;z-index:2}
+.consolidated-table td.name{text-align:left;font-weight:700}
+.consolidated-table td.pending{color:#98a2b3}
+.consolidated-summary{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.consolidated-summary span{background:#f7f9fc;border:1px solid #e3e8ef;border-radius:999px;padding:6px 9px;font-size:12px}
+@media(max-width:700px){.consolidated-controls{grid-template-columns:1fr}.consolidated-controls button{width:100%}}
+
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><div style="margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end"><span id="sync" class="sync">● conectado</span><button id="signout" type="button" title="Cerrar sesión">↪ Cerrar sesión</button></div></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button class="tab" data-tab="calificaciones">Calificaciones</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -131,9 +146,9 @@
 <section id="historial" class="hide"><div class="card"><h2>Historial</h2><p class="muted">Últimos registros realizados con tu usuario.</p><div id="historyList"></div></div></section>
 <section id="novedades" class="hide"><div id="noticesBody"></div></section>
 <section id="calificaciones" class="hide"><div id="gradesBody"></div></section>
-<section id="admin" class="hide"><div class="card"><h2>Panel administrador</h2><div class="admin-grid"><button data-admin="students">👨‍🎓 Estudiantes</button><button data-admin="teachers">👨‍🏫 Docentes</button><button data-admin="schedules">🗓 Horarios</button><button data-admin="reports">📊 Reportes</button><button data-admin="followup">📈 Seguimiento directivo</button><button data-admin="missing">📋 Clases sin registro</button><button data-admin="calendar">📅 Calendario institucional</button><button data-admin="attendance">📝 Registrar asistencia</button></div></div><div id="adminBody"></div></section>
+<section id="admin" class="hide"><div class="card"><h2>Panel administrador</h2><div class="admin-grid"><button data-admin="students">👨‍🎓 Estudiantes</button><button data-admin="teachers">👨‍🏫 Docentes</button><button data-admin="schedules">🗓 Horarios</button><button data-admin="reports">📊 Reportes</button><button data-admin="followup">📈 Seguimiento directivo</button><button data-admin="missing">📋 Clases sin registro</button><button data-admin="calendar">📅 Calendario institucional</button><button data-admin="attendance">📝 Registrar asistencia</button><button data-admin="gradesconsolidated">📊 Consolidado de calificaciones</button></div></div><div id="adminBody"></div></section>
 </main></div><div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
+<script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];let sb=null,profile=null,teacher=null,currentSchedule=null,currentStudents=[],currentSession=null;
 const cfg=window.UEBRA_CONFIG||{};const configured=cfg.SUPABASE_URL&&!cfg.SUPABASE_URL.includes('PEGA_AQUI')&&cfg.SUPABASE_ANON_KEY&&!cfg.SUPABASE_ANON_KEY.includes('PEGA_AQUI');if(!configured)$('#cfgwarn').classList.remove('hide');else sb=supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
 $('#signin').onclick=async()=>{if(!sb)return;$('#loginmsg').textContent='Ingresando…';let {data,error}=await sb.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});if(error){$('#loginmsg').textContent=error.message;return}await boot(data.user)};
@@ -218,7 +233,7 @@ async function retryOfflineQueue(showMessages=true){
 async function loadHistory(){if(!profile)return;let q=sb.from('attendance_sessions').select('id,fecha,periodo,asignatura,course_id,teacher_id,created_by,created_at,courses(nombre,jornada)').order('fecha',{ascending:false}).order('periodo',{ascending:false}).limit(100);if(profile.rol!=='ADMIN'&&teacher)q=q.eq('teacher_id',teacher.id);else q=q.eq('created_by',profile.id);let {data,error}=await q;if(error){$('#historyList').innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}$('#historyList').innerHTML=`<div class="row" style="margin-bottom:10px"><input id="histDate" type="date" class="obs grow" style="margin:0"><input id="histSearch" class="obs grow" style="margin:0" placeholder="Buscar curso o asignatura"></div><div id="histRows"></div>`;let render=()=>{let date=$('#histDate').value,txt=($('#histSearch').value||'').toUpperCase();let a=(data||[]).filter(x=>(!date||x.fecha===date)&&(!txt||`${x.courses?.nombre||''} ${x.asignatura||''}`.toUpperCase().includes(txt)));$('#histRows').innerHTML=a.map(x=>`<div class="listitem row"><div class="grow"><b>${x.fecha} · ${esc(x.courses?.nombre||'')}</b><div class="muted">${esc(x.asignatura)} · ${esc(x.courses?.jornada||'')} · período ${x.periodo||'-'}</div></div><button data-hdetail="${x.id}">Ver detalle</button></div>`).join('')||'<p class="muted">Sin registros para este filtro.</p>';$$('[data-hdetail]').forEach(b=>b.onclick=()=>showSessionDetail(b.dataset.hdetail,'#histRows'))};$('#histDate').onchange=render;$('#histSearch').oninput=render;render()}
 async function showSessionDetail(sessionId,target='#histRows'){let {data:sess,error:e1}=await sb.from('attendance_sessions').select('*,courses(nombre,jornada),teachers(nombre)').eq('id',sessionId).single();if(e1){toast(e1.message,true);return}let {data:marks,error:e2}=await sb.from('attendance').select('estado,observacion,students(nombre,cedula)').eq('session_id',sessionId);if(e2){toast(e2.message,true);return}let c=x=>(marks||[]).filter(m=>m.estado===x).length;let el=$(target);el.innerHTML=`<button id="closeDetail">← Volver</button><div class="card" style="margin-top:10px"><h3>${esc(sess.courses?.nombre||'')} · ${esc(sess.asignatura)}</h3><div class="muted">${sess.fecha} · ${esc(sess.courses?.jornada||'')} · período ${sess.periodo} · ${esc(sess.teachers?.nombre||'')}</div><div class="stats"><div class="stat"><b>${c('P')}</b>P</div><div class="stat"><b>${c('F')}</b>F</div><div class="stat"><b>${c('A')}</b>A</div><div class="stat"><b>${c('J')}</b>J</div></div><div class="tablewrap"><table class="report-table"><thead><tr><th>Estudiante</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${(marks||[]).sort((a,b)=>(a.students?.nombre||'').localeCompare(b.students?.nombre||'')).map(m=>`<tr><td>${esc(m.students?.nombre||'')}<div class="muted tiny">${esc(m.students?.cedula||'')}</div></td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')}</tbody></table></div></div>`;$('#closeDetail').onclick=()=>loadHistory()}
 $$('.tab').forEach(b=>b.onclick=()=>{let id=b.dataset.tab;$$('.tab').forEach(x=>x.classList.toggle('active',x===b));['hoy','historial','novedades','calificaciones','admin'].forEach(x=>$('#'+x).classList.toggle('hide',x!==id));if(id==='admin')showStudents();if(id==='novedades')showNotices();if(id==='calificaciones')showGrades()});
-$$('[data-admin]').forEach(b=>b.onclick=()=>({students:showStudents,teachers:showTeachers,schedules:showSchedules,reports:showReports,followup:showDirectiveFollowup,missing:showMissingClasses,calendar:showSchoolCalendar,attendance:showAdminAttendance}[b.dataset.admin]||(()=>{}))());
+$$('[data-admin]').forEach(b=>b.onclick=()=>({students:showStudents,teachers:showTeachers,schedules:showSchedules,reports:showReports,followup:showDirectiveFollowup,missing:showMissingClasses,calendar:showSchoolCalendar,attendance:showAdminAttendance,gradesconsolidated:showGradeConsolidated}[b.dataset.admin]||(()=>{}))());
 
 let gradeAssignment=null,gradeTrimester=1,gradeStudents=[];
 function gradeSubjectLabel(x){return String(x||'').trim().toLowerCase()==='eca'?'Educación Cultural y Artística':x}
@@ -1335,6 +1350,143 @@ async function saveAdminAttendance(){
  let payload=rows.map(r=>({session_id:sess.id,student_id:r.dataset.aaId,estado:r.querySelector('.sel').dataset.aaSt,observacion:r.querySelector('.obs').value.trim()}));
  let {error}=await sb.from('attendance').upsert(payload,{onConflict:'session_id,student_id'});btn.disabled=false;btn.textContent='Guardar correcciones';if(error){toast(error.message,true);return}toast('✓ Asistencia guardada por administrador');await loadHistory();await loadAdminAttendance();
 }
+
+
+// ===== V2.8 · CONSOLIDADO ACADÉMICO ADMINISTRATIVO =====
+let consolidatedRows=[],consolidatedCourse=null;
+
+function courseAcademicOrder(name){
+ const n=String(name||'').toUpperCase();
+ const order=['SEGUNDO EGB','TERCERO EGB','CUARTO EGB','QUINTO EGB','SEXTO EGB','SEPTIMO EGB','OCTAVO EGB','NOVENO EGB','DECIMO EGB','PRIMERO BGU','SEGUNDO BGU','TERCERO BGU'];
+ let i=order.findIndex(x=>n.includes(x));
+ return i<0?99:i;
+}
+function isQuantitativeCourseName(name){
+ const n=String(name||'').toUpperCase();
+ return !n.includes('INICIAL')&&!n.includes('PRIMERO EGB')&&!n.includes('PREPARATORIA');
+}
+function excelSafeName(s){
+ return String(s||'Consolidado').replace(/[\\\/:*?\[\]]/g,' ').replace(/\s+/g,' ').trim().slice(0,31)||'Consolidado';
+}
+async function showGradeConsolidated(){
+ if(profile?.rol!=='ADMIN'){toast('Solo los administradores pueden abrir el consolidado.',true);return}
+ const box=$('#adminBody');
+ box.innerHTML='<div class="card">Cargando cursos…</div>';
+ let {data,error}=await sb.from('courses').select('id,nombre,jornada,activo').eq('activo',true);
+ if(error){box.innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}
+ let courses=(data||[]).filter(c=>isQuantitativeCourseName(c.nombre)).sort((a,b)=>courseAcademicOrder(a.nombre)-courseAcademicOrder(b.nombre)||String(a.jornada).localeCompare(String(b.jornada),'es'));
+ box.innerHTML=`<div class="card">
+   <div class="grade-head"><div class="grow"><h2>📊 Consolidado de calificaciones</h2>
+   <p class="muted">Consulta el avance académico por grado y descarga el consolidado en Excel. Los períodos aún no completados permanecen vacíos.</p></div></div>
+   <div class="consolidated-controls">
+    <label>Grado y jornada
+      <select id="consolidatedCourse"><option value="">Seleccione…</option>${courses.map(c=>`<option value="${c.id}">${esc(c.nombre)} · ${esc(c.jornada)}</option>`).join('')}</select>
+    </label>
+    <button id="consolidatedLoad" class="primary">Ver consolidado</button>
+   </div>
+  </div><div id="consolidatedResult"></div>`;
+ $('#consolidatedLoad').onclick=loadGradeConsolidated;
+}
+async function loadGradeConsolidated(){
+ const cid=$('#consolidatedCourse').value;
+ if(!cid){toast('Selecciona un grado y jornada.',true);return}
+ const opt=$('#consolidatedCourse').selectedOptions[0];
+ const label=opt.textContent;
+ const result=$('#consolidatedResult');
+ result.innerHTML='<div class="card">Preparando consolidado…</div>';
+ let {data,error}=await sb.rpc('admin_grade_consolidated',{p_course_id:cid});
+ if(error){result.innerHTML='<div class="notice">No se pudo cargar el consolidado: '+esc(error.message)+'</div>';return}
+ consolidatedRows=data||[];
+ let [nombre,jornada]=label.split(' · ');
+ consolidatedCourse={id:cid,nombre:nombre||label,jornada:jornada||''};
+ renderGradeConsolidated();
+}
+function pivotConsolidated(rows){
+ const subjects=[];
+ const subjectSeen=new Set();
+ const students=new Map();
+ for(const r of rows){
+  if(!subjectSeen.has(r.asignatura_normalizada)){subjectSeen.add(r.asignatura_normalizada);subjects.push({key:r.asignatura_normalizada,label:gradeSubjectLabel(r.asignatura)})}
+  if(!students.has(r.student_id))students.set(r.student_id,{
+   id:r.student_id,nombre:r.estudiante,cedula:r.cedula||'',estado:r.estado_estudiante||'',
+   promedio:r.promedio_general_anual,situacion:r.situacion_academica||'PENDIENTE',grades:{}
+  });
+  let st=students.get(r.student_id);
+  st.promedio=r.promedio_general_anual;
+  st.situacion=r.situacion_academica||'PENDIENTE';
+  st.grades[r.asignatura_normalizada]={t1:r.trimestre_1,t2:r.trimestre_2,t3:r.trimestre_3,pal:r.pal};
+ }
+ return {subjects,students:[...students.values()]};
+}
+function renderGradeConsolidated(){
+ const result=$('#consolidatedResult');
+ if(!consolidatedRows.length){result.innerHTML='<div class="card"><p class="muted">No hay estudiantes/asignaturas para mostrar en este curso.</p></div>';return}
+ const p=pivotConsolidated(consolidatedRows);
+ const nPending=p.students.filter(s=>String(s.situacion).toUpperCase()==='PENDIENTE').length;
+ result.innerHTML=`<div class="card">
+  <div class="grade-head"><div class="grow"><h3>${esc(consolidatedCourse.nombre)} · ${esc(consolidatedCourse.jornada)}</h3>
+   <div class="muted">${p.students.length} estudiantes · ${p.subjects.length} asignaturas cuantitativas</div></div>
+   <button id="downloadGradeExcel" class="primary">📥 Descargar Excel</button>
+  </div>
+  <div class="consolidated-summary"><span>Año lectivo 2026–2027</span><span>PAL y promedio anual: truncados a 2 decimales</span>${nPending?`<span>${nPending} situación(es) pendiente(s)</span>`:''}</div>
+  <div class="consolidated-table-wrap"><table class="consolidated-table"><thead><tr>
+   <th>N.º</th><th>Cédula</th><th>Estudiante</th>${p.subjects.map(s=>`<th colspan="4">${esc(s.label)}</th>`).join('')}<th>Promedio general</th><th>Situación académica</th>
+  </tr><tr><th></th><th></th><th></th>${p.subjects.map(()=>'<th>T1</th><th>T2</th><th>T3</th><th>PAL</th>').join('')}<th>Anual</th><th></th></tr></thead><tbody>
+  ${p.students.map((st,i)=>`<tr><td>${i+1}</td><td>${esc(st.cedula)}</td><td class="name">${esc(st.nombre)}</td>${p.subjects.map(s=>{let g=st.grades[s.key]||{};return [g.t1,g.t2,g.t3,g.pal].map(v=>`<td class="${v==null?'pending':''}">${v==null?'—':fmtGrade(v)}</td>`).join('')}).join('')}<td class="${st.promedio==null?'pending':''}">${st.promedio==null?'—':fmtGrade(st.promedio)}</td><td>${esc(st.situacion)}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
+ $('#downloadGradeExcel').onclick=downloadGradeConsolidatedExcel;
+}
+function downloadGradeConsolidatedExcel(){
+ if(typeof XLSX==='undefined'){toast('No se pudo cargar el componente de Excel. Verifica la conexión a Internet y vuelve a intentar.',true);return}
+ if(!consolidatedRows.length||!consolidatedCourse){toast('Primero carga un consolidado.',true);return}
+ const p=pivotConsolidated(consolidatedRows);
+ const aoa=[];
+ aoa.push(['UNIDAD EDUCATIVA BENJAMÍN RAMÍREZ ARTEAGA']);
+ aoa.push([`CONSOLIDADO ACADÉMICO · ${consolidatedCourse.nombre} · ${consolidatedCourse.jornada} · AÑO LECTIVO 2026–2027`]);
+ aoa.push([]);
+ let h1=['N.º','Cédula','Estudiante','Estado'];
+ let h2=['','','',''];
+ p.subjects.forEach(s=>{h1.push(s.label,'','','');h2.push('T1','T2','T3','PAL')});
+ h1.push('Promedio General Anual','Situación Académica');
+ h2.push('','');
+ aoa.push(h1);aoa.push(h2);
+ p.students.forEach((st,i)=>{
+  let row=[i+1,st.cedula,st.nombre,st.estado];
+  p.subjects.forEach(s=>{let g=st.grades[s.key]||{};row.push(g.t1==null?null:Number(g.t1),g.t2==null?null:Number(g.t2),g.t3==null?null:Number(g.t3),g.pal==null?null:Number(g.pal))});
+  row.push(st.promedio==null?null:Number(st.promedio),st.situacion);
+  aoa.push(row);
+ });
+ const ws=XLSX.utils.aoa_to_sheet(aoa);
+ const lastCol=h1.length-1;
+ ws['!merges']=[
+  {s:{r:0,c:0},e:{r:0,c:lastCol}},
+  {s:{r:1,c:0},e:{r:1,c:lastCol}}
+ ];
+ let c=4;
+ p.subjects.forEach(()=>{ws['!merges'].push({s:{r:3,c},e:{r:3,c:c+3}});c+=4});
+ // Cédula siempre como texto para conservar ceros iniciales.
+ for(let r=5;r<5+p.students.length;r++){
+  let ced=XLSX.utils.encode_cell({r,c:1});
+  if(ws[ced]){ws[ced].t='s';ws[ced].v=String(p.students[r-5].cedula||'')}
+  // Las notas permanecen numéricas; Excel las mostrará con dos decimales
+  // y usará el separador decimal configurado en el equipo (coma en configuración Ecuador).
+  for(let col=4;col<lastCol;col++){
+   let a=XLSX.utils.encode_cell({r,c:col});
+   if(ws[a]&&ws[a].t==='n')ws[a].z='0.00';
+  }
+ }
+ ws['!cols']=[
+  {wch:6},{wch:14},{wch:38},{wch:12},
+  ...p.subjects.flatMap(()=>[{wch:8},{wch:8},{wch:8},{wch:8}]),
+  {wch:18},{wch:34}
+ ];
+ const wb=XLSX.utils.book_new();
+ XLSX.utils.book_append_sheet(wb,ws,excelSafeName(`${consolidatedCourse.nombre} ${consolidatedCourse.jornada}`));
+ const fname=`Consolidado_${consolidatedCourse.nombre}_${consolidatedCourse.jornada}_2026-2027.xlsx`.replace(/\s+/g,'_');
+ XLSX.writeFile(wb,fname);
+ toast('✓ Consolidado Excel descargado');
+}
+
 
 let toastTimer=null;function toast(msg,isError=false){let t=$('#toast');if(!t)return;t.textContent=msg;t.classList.toggle('error',!!isError);t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3200)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
