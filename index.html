@@ -231,11 +231,14 @@ async function openGradeAssignment(a){
 }
 async function renderGradeWorkspace(){
  let a=gradeAssignment,box=$('#gradesBody');if(!a)return showGrades();
- box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(gradeSubjectLabel(a.asignatura))}</h2><div class="muted">${esc(a.grado)} · ${esc(a.jornada)} · ${gradeStudents.length} estudiantes</div></div><button id="gradeBack">← Asignaturas</button></div><div class="grade-trims">${[1,2,3].map(n=>`<button data-grade-trim="${n}" class="${gradeTrimester===n?'active':''}">${n}.º trimestre</button>`).join('')}</div></div><div class="card"><h3>Evaluación formativa · 70 %</h3><p class="muted">Crea los insumos que necesites durante el trimestre. Los casilleros vacíos significan “todavía no calificado”.</p><div class="grade-form"><label>Tipo<select id="gradeType"><option value="LECCION_ORAL">Lección oral</option><option value="LECCION_ESCRITA">Lección escrita</option><option value="TAREA">Tarea</option><option value="TRABAJO_CLASE">Trabajo en clase</option><option value="TRABAJO_GRUPAL">Trabajo grupal</option><option value="EXPOSICION">Exposición</option><option value="INVESTIGACION">Trabajo de investigación</option><option value="PORTAFOLIO">Portafolio</option></select></label><label>Nombre del insumo<input id="gradeName" placeholder="Ej.: Operaciones con números enteros"></label><label>Fecha<input id="gradeDate" type="date" value="${ecuadorDate()}"></label></div><button id="gradeAdd" class="primary" style="margin-top:10px">＋ Agregar insumo</button></div><div id="gradeItems"><div class="card">Cargando insumos…</div></div><div id="gradeProject"><div class="card">Cargando proyecto interdisciplinario…</div></div>`;
+ let optional3=false;
+ let optCheck=await sb.rpc('is_third_bgu_optional',{p_course_id:a.course_id,p_asignatura:a.asignatura});
+ if(!optCheck.error)optional3=!!optCheck.data;
+ box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(gradeSubjectLabel(a.asignatura))}</h2><div class="muted">${esc(a.grado)} · ${esc(a.jornada)} · ${gradeStudents.length} estudiantes</div></div><button id="gradeBack">← Asignaturas</button></div><div class="grade-trims">${[1,2,3].map(n=>`<button data-grade-trim="${n}" class="${gradeTrimester===n?'active':''}">${n}.º trimestre</button>`).join('')}</div></div><div class="card"><h3>${optional3?'Evaluación de la asignatura · 100 %':'Evaluación formativa · 70 %'}</h3><p class="muted">${optional3?'La nota trimestral corresponde al promedio definitivo de los insumos registrados. Esta asignatura no participa en el Proyecto Interdisciplinario ni en el promedio global trimestral.':'Crea los insumos que necesites durante el trimestre. Los casilleros vacíos significan “todavía no calificado”.'}</p><div class="grade-form"><label>Tipo<select id="gradeType"><option value="LECCION_ORAL">Lección oral</option><option value="LECCION_ESCRITA">Lección escrita</option><option value="TAREA">Tarea</option><option value="TRABAJO_CLASE">Trabajo en clase</option><option value="TRABAJO_GRUPAL">Trabajo grupal</option><option value="EXPOSICION">Exposición</option><option value="INVESTIGACION">Trabajo de investigación</option><option value="PORTAFOLIO">Portafolio</option></select></label><label>Nombre del insumo<input id="gradeName" placeholder="Ej.: Operaciones con números enteros"></label><label>Fecha<input id="gradeDate" type="date" value="${ecuadorDate()}"></label></div><button id="gradeAdd" class="primary" style="margin-top:10px">＋ Agregar insumo</button></div><div id="gradeItems"><div class="card">Cargando insumos…</div></div><div id="gradeProject"><div class="card">Cargando proyecto interdisciplinario…</div></div>`;
  $('#gradeBack').onclick=showGrades;
  $$('[data-grade-trim]').forEach(b=>b.onclick=async()=>{gradeTrimester=Number(b.dataset.gradeTrim);await renderGradeWorkspace()});
  $('#gradeAdd').onclick=createGradeItem;
- await Promise.all([loadGradeItems(),loadProjectSection()]);
+ await Promise.all([loadGradeItems(), optional3?loadOptionalSummary():loadProjectSection()]);
 }
 async function createGradeItem(){
  let nombre=$('#gradeName').value.trim(),tipo=$('#gradeType').value,fecha=$('#gradeDate').value;if(!nombre||!fecha){toast('Escribe el nombre del insumo y selecciona la fecha.',true);return}
@@ -262,6 +265,17 @@ async function deleteGradeItem(item){
  toast('✓ Insumo eliminado');await loadGradeItems();
 }
 
+async function loadOptionalSummary(){
+ let box=$('#gradeProject');if(!box||!gradeAssignment)return;
+ box.innerHTML='<div class="card">Calculando notas trimestrales…</div>';
+ let results=await Promise.all(gradeStudents.map(async st=>{
+  let {data,error}=await sb.rpc('subject_trimester_grade',{p_student_id:st.id,p_course_id:gradeAssignment.course_id,p_asignatura:gradeAssignment.asignatura,p_trimestre:gradeTrimester});
+  return {student:st,nota:error?null:data,error};
+ }));
+ let bad=results.find(x=>x.error);
+ if(bad){box.innerHTML='<div class="notice">No se pudo calcular el resumen: '+esc(bad.error.message||'Error')+'</div>';return}
+ box.innerHTML=`<div class="card"><h3>Resumen trimestral · 100 %</h3><p class="muted">El promedio definitivo de los insumos registrados constituye directamente la nota trimestral. Las mejoras registradas se incorporan automáticamente.</p>${results.map((r,i)=>`<div class="project-compact-row"><div class="project-compact-top"><div class="project-compact-name"><b>${i+1}. ${esc(r.student.nombre)}</b><div class="muted">${esc(r.student.cedula||'')}</div></div><span class="pill">${r.nota==null?'Pendiente':fmtGrade(r.nota)}</span></div></div>`).join('')}</div>`;
+}
 async function loadProjectSection(){
  let box=$('#gradeProject');if(!box||!gradeAssignment)return;
  box.innerHTML='<div class="card">Cargando proyecto interdisciplinario…</div>';
