@@ -103,6 +103,27 @@
 .improve-preview{margin:12px 0;padding:12px;border-radius:12px;background:#eef5fb;font-weight:800;color:#173f6b}
 @media(max-width:620px){.improve-grid{grid-template-columns:1fr}}
 
+
+/* Proyecto interdisciplinario - vista compacta */
+.project-compact-row{padding:12px 0;border-bottom:1px solid #e5e7eb}
+.project-compact-top{display:flex;align-items:center;gap:10px}
+.project-compact-name{flex:1;min-width:0}
+.project-compact-name b{display:block;line-height:1.15}
+.project-compact-name .muted{font-size:12px;margin-top:2px}
+.project-compact-input{width:88px;flex:0 0 88px}
+.project-compact-input label{display:block;font-size:12px;font-weight:700;margin-bottom:3px}
+.project-compact-input input{width:100%;box-sizing:border-box}
+.project-compact-bottom{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:7px}
+.project-metrics{font-size:12px;line-height:1.35;color:#4b5563}
+.project-metrics b{color:#111827}
+@media(max-width:700px){
+ .project-compact-row{padding:10px 0}
+ .project-compact-name b{font-size:14px}
+ .project-compact-input{width:78px;flex-basis:78px}
+ .project-compact-bottom{gap:5px}
+ .project-metrics{font-size:11px}
+}
+
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button class="tab" data-tab="calificaciones">Calificaciones</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -275,7 +296,7 @@ async function loadProjectSection(){
   <div class="grade-head">
    <div class="grow">
     <h3>Proyecto interdisciplinario · 30 %</h3>
-    <p class="muted">Registra únicamente el aporte de <b>${esc(gradeSubjectLabel(gradeAssignment.asignatura))}</b>. El promedio del proyecto, la sumativa y la nota trimestral permanecen <b>Pendientes</b> hasta que todas las asignaturas participantes hayan registrado su aporte para cada estudiante.</p>
+    <p class="muted">Registra el aporte de <b>${esc(gradeSubjectLabel(gradeAssignment.asignatura))}</b>. Hasta completar todos los aportes, el proyecto, la sumativa y la nota trimestral permanecen <b>Pendientes</b>.</p>
    </div>
    <span class="pill">${esc(estadoGeneral)}</span>
   </div>
@@ -284,19 +305,20 @@ async function loadProjectSection(){
    ${rows.map((r,i)=>{
     let avance=`${Number(r.aportes_registrados||0)}/${Number(r.asignaturas_esperadas||0)}`;
     let completo=!!r.proyecto_completo;
-    return `<div class="grade-student-v2" data-project-student="${r.student_id}">
-      <div class="grade-student-main">
-       <div class="grow"><b>${i+1}. ${esc(r.estudiante)}</b><div class="muted">${esc(r.cedula||'')}</div></div>
-       <label style="min-width:115px">Mi aporte
+    return `<div class="project-compact-row" data-project-student="${r.student_id}">
+      <div class="project-compact-top">
+       <div class="project-compact-name">
+        <b>${i+1}. ${esc(r.estudiante)}</b>
+        <div class="muted">${esc(r.cedula||'')}</div>
+       </div>
+       <div class="project-compact-input">
+        <label>Mi aporte</label>
         <input class="project-input" type="number" inputmode="decimal" min="0" max="10" step="0.01" placeholder="—" value="${r.nota_aporte==null?'':esc(r.nota_aporte)}">
-       </label>
+       </div>
       </div>
-      <div class="grade-result-row">
+      <div class="project-compact-bottom">
        <span class="pill">${completo?'✓ Completo':'Pendiente'} · ${avance}</span>
-       <span>Formativa: <b>${fmtGrade(r.promedio_formativo)}</b></span>
-       <span>Promedio proyecto: <b>${completo?fmtGrade(r.promedio_proyecto):'Pendiente'}</b></span>
-       <span>Sumativa: <b>${completo?fmtGrade(r.nota_sumativa):'Pendiente'}</b></span>
-       <span>Trimestral: <b>${completo?fmtGrade(r.nota_trimestral):'Pendiente'}</b></span>
+       <span class="project-metrics"><b>F:</b> ${fmtGrade(r.promedio_formativo)} · <b>P:</b> ${completo?fmtGrade(r.promedio_proyecto):'—'} · <b>S:</b> ${completo?fmtGrade(r.nota_sumativa):'—'} · <b>T:</b> ${completo?fmtGrade(r.nota_trimestral):'—'}</span>
       </div>
      </div>`;
    }).join('')}
