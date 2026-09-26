@@ -61,13 +61,19 @@
 .directive-class-meta{font-size:12px;color:#667085;margin-top:3px;line-height:1.4}
 .directive-detail-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 
+
+.calendar-admin-grid{display:grid;grid-template-columns:1fr 1.4fr 1fr;gap:10px;align-items:end}
+.calendar-admin-item{border:1px solid #dce5ef;border-radius:13px;padding:12px;margin:9px 0;background:#fff}
+.calendar-admin-date{font-weight:800;color:#10233d}.calendar-admin-motive{font-weight:700;margin-top:5px}
+.calendar-admin-meta{font-size:12px;color:#667085;margin-top:3px}.calendar-admin-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
+@media(max-width:700px){.calendar-admin-grid{grid-template-columns:1fr}}
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
 <section id="hoy"><div id="todayclasses"></div><div id="attendance" class="hide"><div class="card classnow"><div class="row"><div class="grow"><h2 id="classTitle"></h2><div id="classMeta" class="muted"></div></div><button id="backClasses">← Clases</button></div></div><div class="row"><button id="allP">Marcar todos P</button><span id="summary" class="grow muted"></span></div><div id="students"></div><div class="toolbar"><button id="saveAtt" class="primary wide">Guardar y sincronizar asistencia</button></div></div></section>
 <section id="historial" class="hide"><div class="card"><h2>Historial</h2><p class="muted">Últimos registros realizados con tu usuario.</p><div id="historyList"></div></div></section>
 <section id="novedades" class="hide"><div id="noticesBody"></div></section>
-<section id="admin" class="hide"><div class="card"><h2>Panel administrador</h2><div class="admin-grid"><button data-admin="students">👨‍🎓 Estudiantes</button><button data-admin="teachers">👨‍🏫 Docentes</button><button data-admin="schedules">🗓 Horarios</button><button data-admin="reports">📊 Reportes</button><button data-admin="followup">📈 Seguimiento directivo</button><button data-admin="attendance">📝 Registrar asistencia</button></div></div><div id="adminBody"></div></section>
+<section id="admin" class="hide"><div class="card"><h2>Panel administrador</h2><div class="admin-grid"><button data-admin="students">👨‍🎓 Estudiantes</button><button data-admin="teachers">👨‍🏫 Docentes</button><button data-admin="schedules">🗓 Horarios</button><button data-admin="reports">📊 Reportes</button><button data-admin="followup">📈 Seguimiento directivo</button><button data-admin="calendar">📅 Calendario institucional</button><button data-admin="attendance">📝 Registrar asistencia</button></div></div><div id="adminBody"></div></section>
 </main></div><div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];let sb=null,profile=null,teacher=null,currentSchedule=null,currentStudents=[],currentSession=null;
@@ -145,7 +151,7 @@ async function retryOfflineQueue(showMessages=true){
 async function loadHistory(){if(!profile)return;let q=sb.from('attendance_sessions').select('id,fecha,periodo,asignatura,course_id,teacher_id,created_by,created_at,courses(nombre,jornada)').order('fecha',{ascending:false}).order('periodo',{ascending:false}).limit(100);if(profile.rol!=='ADMIN'&&teacher)q=q.eq('teacher_id',teacher.id);else q=q.eq('created_by',profile.id);let {data,error}=await q;if(error){$('#historyList').innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}$('#historyList').innerHTML=`<div class="row" style="margin-bottom:10px"><input id="histDate" type="date" class="obs grow" style="margin:0"><input id="histSearch" class="obs grow" style="margin:0" placeholder="Buscar curso o asignatura"></div><div id="histRows"></div>`;let render=()=>{let date=$('#histDate').value,txt=($('#histSearch').value||'').toUpperCase();let a=(data||[]).filter(x=>(!date||x.fecha===date)&&(!txt||`${x.courses?.nombre||''} ${x.asignatura||''}`.toUpperCase().includes(txt)));$('#histRows').innerHTML=a.map(x=>`<div class="listitem row"><div class="grow"><b>${x.fecha} · ${esc(x.courses?.nombre||'')}</b><div class="muted">${esc(x.asignatura)} · ${esc(x.courses?.jornada||'')} · período ${x.periodo||'-'}</div></div><button data-hdetail="${x.id}">Ver detalle</button></div>`).join('')||'<p class="muted">Sin registros para este filtro.</p>';$$('[data-hdetail]').forEach(b=>b.onclick=()=>showSessionDetail(b.dataset.hdetail,'#histRows'))};$('#histDate').onchange=render;$('#histSearch').oninput=render;render()}
 async function showSessionDetail(sessionId,target='#histRows'){let {data:sess,error:e1}=await sb.from('attendance_sessions').select('*,courses(nombre,jornada),teachers(nombre)').eq('id',sessionId).single();if(e1){toast(e1.message,true);return}let {data:marks,error:e2}=await sb.from('attendance').select('estado,observacion,students(nombre,cedula)').eq('session_id',sessionId);if(e2){toast(e2.message,true);return}let c=x=>(marks||[]).filter(m=>m.estado===x).length;let el=$(target);el.innerHTML=`<button id="closeDetail">← Volver</button><div class="card" style="margin-top:10px"><h3>${esc(sess.courses?.nombre||'')} · ${esc(sess.asignatura)}</h3><div class="muted">${sess.fecha} · ${esc(sess.courses?.jornada||'')} · período ${sess.periodo} · ${esc(sess.teachers?.nombre||'')}</div><div class="stats"><div class="stat"><b>${c('P')}</b>P</div><div class="stat"><b>${c('F')}</b>F</div><div class="stat"><b>${c('A')}</b>A</div><div class="stat"><b>${c('J')}</b>J</div></div><div class="tablewrap"><table class="report-table"><thead><tr><th>Estudiante</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${(marks||[]).sort((a,b)=>(a.students?.nombre||'').localeCompare(b.students?.nombre||'')).map(m=>`<tr><td>${esc(m.students?.nombre||'')}<div class="muted tiny">${esc(m.students?.cedula||'')}</div></td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')}</tbody></table></div></div>`;$('#closeDetail').onclick=()=>loadHistory()}
 $$('.tab').forEach(b=>b.onclick=()=>{let id=b.dataset.tab;$$('.tab').forEach(x=>x.classList.toggle('active',x===b));['hoy','historial','novedades','admin'].forEach(x=>$('#'+x).classList.toggle('hide',x!==id));if(id==='admin')showStudents();if(id==='novedades')showNotices()});
-$$('[data-admin]').forEach(b=>b.onclick=()=>({students:showStudents,teachers:showTeachers,schedules:showSchedules,reports:showReports,followup:showDirectiveFollowup,attendance:showAdminAttendance}[b.dataset.admin]||(()=>{}))());
+$$('[data-admin]').forEach(b=>b.onclick=()=>({students:showStudents,teachers:showTeachers,schedules:showSchedules,reports:showReports,followup:showDirectiveFollowup,calendar:showSchoolCalendar,attendance:showAdminAttendance}[b.dataset.admin]||(()=>{}))());
 
 async function showNotices(){
  let box=$('#noticesBody');
@@ -283,6 +289,70 @@ async function saveNotices(){
  toast(`✓ Novedad guardada para ${selected.length} estudiante${selected.length===1?'':'s'}.`);
  selected.forEach(x=>x.checked=false);
  $('#nObs').value='';
+}
+
+
+function resetSchoolCalendarForm(){
+ let id=$('#calId'); if(id)id.value='';
+ if($('#calDate'))$('#calDate').value='';
+ if($('#calMotive'))$('#calMotive').value='';
+ if($('#calShift'))$('#calShift').value='';
+ if($('#calTitle'))$('#calTitle').textContent='Agregar fecha sin clase';
+ if($('#calSave'))$('#calSave').textContent='Guardar fecha';
+ if($('#calCancel'))$('#calCancel').classList.add('hide');
+ if($('#calMsg'))$('#calMsg').textContent='';
+}
+async function showSchoolCalendar(){
+ $('#adminBody').innerHTML=`<div class="card"><h3>📅 Calendario institucional</h3>
+ <p class="muted">Estas fechas se excluyen automáticamente del cálculo de clases programadas en el Seguimiento Directivo.</p>
+ <h4 id="calTitle">Agregar fecha sin clase</h4><input id="calId" type="hidden">
+ <div class="calendar-admin-grid">
+  <label>Fecha<input id="calDate" type="date"></label>
+  <label>Motivo<input id="calMotive" placeholder="Ej.: Juramento a la Bandera"></label>
+  <label>Alcance<select id="calShift"><option value="">Toda la institución</option><option value="MATUTINA">Matutina</option><option value="VESPERTINA">Vespertina</option></select></label>
+ </div>
+ <div class="row" style="margin-top:10px"><button id="calSave" class="primary">Guardar fecha</button><button id="calCancel" class="hide">Cancelar edición</button></div>
+ <div id="calMsg" class="muted" style="margin-top:8px"></div></div>
+ <div class="card"><h3>Fechas registradas</h3><div id="calList">Cargando…</div></div>`;
+ $('#calSave').onclick=saveSchoolCalendar;
+ $('#calCancel').onclick=resetSchoolCalendarForm;
+ await loadSchoolCalendar();
+}
+async function loadSchoolCalendar(){
+ let box=$('#calList'); if(!box)return;
+ let r=await sb.from('school_calendar_exceptions').select('id,fecha,motivo,jornada,activo').order('fecha',{ascending:true});
+ if(r.error){box.innerHTML='<div class="notice">'+esc(r.error.message)+'</div>';return}
+ let rows=r.data||[];
+ box.innerHTML=rows.length?rows.map(x=>`<div class="calendar-admin-item">
+  <div class="calendar-admin-date">${formatDirectiveDate(x.fecha)}</div>
+  <div class="calendar-admin-motive">${esc(x.motivo)}</div>
+  <div class="calendar-admin-meta">${x.jornada?esc(x.jornada):'Toda la institución'} · ${x.activo?'Activa':'Desactivada'}</div>
+  <div class="calendar-admin-actions"><button data-caledit="${x.id}">Editar</button><button data-caltoggle="${x.id}" data-active="${x.activo}">${x.activo?'Desactivar':'Activar'}</button><button data-caldelete="${x.id}">Eliminar</button></div>
+ </div>`).join(''):'<div class="muted">No existen fechas registradas.</div>';
+ box.querySelectorAll('[data-caledit]').forEach(b=>b.onclick=()=>{
+  let x=rows.find(v=>v.id===b.dataset.caledit); if(!x)return;
+  $('#calId').value=x.id;$('#calDate').value=x.fecha;$('#calMotive').value=x.motivo||'';$('#calShift').value=x.jornada||'';
+  $('#calTitle').textContent='Editar fecha sin clase';$('#calSave').textContent='Guardar cambios';$('#calCancel').classList.remove('hide');
+  $('#calDate').scrollIntoView({behavior:'smooth',block:'center'});
+ });
+ box.querySelectorAll('[data-caltoggle]').forEach(b=>b.onclick=async()=>{
+  let r=await sb.from('school_calendar_exceptions').update({activo:b.dataset.active!=='true'}).eq('id',b.dataset.caltoggle);
+  if(r.error){alert(r.error.message);return} await loadSchoolCalendar();
+ });
+ box.querySelectorAll('[data-caldelete]').forEach(b=>b.onclick=async()=>{
+  let x=rows.find(v=>v.id===b.dataset.caldelete);if(!x)return;
+  if(!confirm(`¿Eliminar ${formatDirectiveDate(x.fecha)} · ${x.motivo}?`))return;
+  let r=await sb.from('school_calendar_exceptions').delete().eq('id',x.id);
+  if(r.error){alert(r.error.message);return} await loadSchoolCalendar();
+ });
+}
+async function saveSchoolCalendar(){
+ let id=$('#calId').value,fecha=$('#calDate').value,motivo=$('#calMotive').value.trim(),jornada=$('#calShift').value||null,msg=$('#calMsg');
+ if(!fecha||!motivo){msg.textContent='Completa la fecha y el motivo.';return}
+ msg.textContent='Guardando…';let payload={fecha,motivo,jornada,activo:true};
+ let r=id?await sb.from('school_calendar_exceptions').update(payload).eq('id',id):await sb.from('school_calendar_exceptions').insert(payload);
+ if(r.error){msg.textContent=r.code==='23505'?'Ya existe una fecha con ese mismo alcance.':r.error.message;return}
+ resetSchoolCalendarForm();await loadSchoolCalendar();
 }
 
 async function showStudents(){let {data:c}=await sb.from('courses').select('*').eq('activo',true).order('jornada').order('nombre');$('#adminBody').innerHTML=`<div class="card"><h3>Estudiantes</h3><div class="row"><select id="acourse" class="grow">${(c||[]).map(x=>`<option value="${x.id}">${x.jornada} · ${x.nombre}</option>`).join('')}</select><button id="addStudent">+ Agregar</button></div><input id="asearch" class="obs" placeholder="Buscar estudiante"><div id="alist"></div></div>`;$('#acourse').onchange=renderAdminStudents;$('#asearch').oninput=renderAdminStudents;$('#addStudent').onclick=()=>editStudent(null);renderAdminStudents()}
