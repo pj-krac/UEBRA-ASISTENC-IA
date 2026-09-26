@@ -315,23 +315,25 @@ async function showDirectiveFollowup(){
  <label>Curso<select id="dCourse"><option value="">Todos</option>${courses.map(x=>`<option value="${x.id}">${esc(x.jornada)} · ${esc(x.nombre)}</option>`).join('')}</select></label>
  <label>Docente<select id="dTeacher"><option value="">Todos</option>${(teachers||[]).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}</select></label>
  <label>Estudiante<input id="dStudent" placeholder="Nombre o cédula"></label>
- <label>Fechas sin clase<input id="dNoClass" placeholder="Ej.: 25/09/2026, 09/10/2026"></label></div>
+ <label>Calendario institucional
+ <div id="dCalendarInfo" class="muted" style="padding:10px 12px;border:1px solid #dce5ef;border-radius:10px;background:#f7f9fc">Cargando fechas sin clase…</div>
+ </label></div>
  <div class="row" style="margin-top:12px"><button id="dRun" class="primary">Actualizar seguimiento</button><button id="dToday">Solo hoy</button></div></div><div id="directiveResults"></div>`;
- let savedNoClass=localStorage.getItem('uebra_directive_no_class_dates')||'';
- if($('#dNoClass')&&savedNoClass)$('#dNoClass').value=savedNoClass.split(',').map(formatDirectiveDate).join(', ');
  $('#dRun').onclick=runDirectiveFollowup;$('#dToday').onclick=()=>{$('#dFrom').value=today;$('#dTo').value=today;runDirectiveFollowup()};await runDirectiveFollowup()
 }
 async function runDirectiveFollowup(){
  let box=$('#directiveResults'),from=$('#dFrom').value,to=$('#dTo').value,shift=$('#dShift').value,cid=$('#dCourse').value,tid=$('#dTeacher').value,search=($('#dStudent').value||'').trim().toUpperCase();
- let noClassRaw=($('#dNoClass')?.value||'').trim();
- const normalizeNoClass=v=>{
-   let s=String(v||'').trim();
-   let m=s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-   if(m)return `${m[3]}-${m[2]}-${m[1]}`;
-   return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:null;
- };
- let noClassDates=new Set(noClassRaw.split(/[;,\n]+/).map(normalizeNoClass).filter(Boolean));
- localStorage.setItem('uebra_directive_no_class_dates',[...noClassDates].join(','));
+ let calq=sb.from('school_calendar_exceptions').select('fecha,motivo,jornada').eq('activo',true).gte('fecha',from).lte('fecha',to);
+ let calr=await calq;
+ if(calr.error){box.innerHTML='<div class="notice">No se pudo leer el calendario institucional: '+esc(calr.error.message)+'</div>';return}
+ let calendarExceptions=(calr.data||[]).filter(x=>!x.jornada||!shift||x.jornada===shift);
+ let noClassDates=new Set(calendarExceptions.map(x=>x.fecha));
+ let calInfo=$('#dCalendarInfo');
+ if(calInfo){
+   calInfo.innerHTML=calendarExceptions.length
+    ? calendarExceptions.map(x=>`📅 <b>${formatDirectiveDate(x.fecha)}</b> · ${esc(x.motivo)}${x.jornada?' · '+esc(x.jornada):' · Toda la institución'}`).join('<br>')
+    : 'Sin fechas excluidas en el período seleccionado.';
+ }
  box.innerHTML='<div class="card">Analizando información institucional…</div>';
  if(from>to){box.innerHTML='<div class="notice">La fecha inicial no puede ser posterior a la final.</div>';return}
  let q=sb.from('attendance_sessions').select('id,fecha,periodo,asignatura,course_id,teacher_id,courses(nombre,jornada),teachers(nombre)').gte('fecha',from).lte('fecha',to);
@@ -466,7 +468,7 @@ async function runDirectiveFollowup(){
  </div>
  <div class="card"><h3>👩‍🏫 Seguimiento por docente</h3>
  <p class="muted">Comparación entre el horario activo y las asistencias registradas en el período seleccionado.</p>
- <div class="directive-compare-note">📅 <b>Programadas</b>: horas del horario que corresponden a los días del período. <b>Registradas</b>: esas horas que ya tienen sesión de asistencia. <b>Sin registro</b>: horas programadas para las que no se encontró sesión. Las fechas escritas en “Fechas sin clase” no se contabilizan. Este reporte es informativo y no constituye una valoración automática del docente.</div>
+ <div class="directive-compare-note">📅 <b>Programadas</b>: horas del horario que corresponden a los días del período. <b>Registradas</b>: esas horas que ya tienen sesión de asistencia. <b>Sin registro</b>: horas programadas para las que no se encontró sesión. Las fechas registradas en el Calendario institucional no se contabilizan. Este reporte es informativo y no constituye una valoración automática del docente.</div>
  <div class="directive-teacher-grid">${teacherRows.length?teacherRows.map(r=>`<div class="directive-teacher-card">
    <h4>${esc(r.name)}</h4>
    <div class="directive-teacher-meta">${[...r.subjects].map(esc).join(' · ')||'Sin asignatura registrada'}</div>
