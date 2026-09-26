@@ -210,7 +210,7 @@ async function openGradeAssignment(a){
 }
 async function renderGradeWorkspace(){
  let a=gradeAssignment,box=$('#gradesBody');if(!a)return showGrades();
- box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(gradeSubjectLabel(a.asignatura))}</h2><div class="muted">${esc(a.grado)} · ${esc(a.jornada)} · ${gradeStudents.length} estudiantes</div></div><button id="gradeBack">← Asignaturas</button></div><div class="grade-trims">${[1,2,3].map(n=>`<button data-grade-trim="${n}" class="${gradeTrimester===n?'active':''}">${n}.º trimestre</button>`).join('')}</div></div><div class="card"><h3>Evaluación formativa · 70 %</h3><p class="muted">Crea los insumos que necesites durante el trimestre. Los casilleros vacíos significan “todavía no calificado”.</p><div class="grade-form"><label>Tipo<select id="gradeType"><option value="TAREA">Tarea</option><option value="LECCION">Lección</option><option value="TRABAJO_INDIVIDUAL">Trabajo individual</option><option value="TRABAJO_GRUPAL">Trabajo grupal</option><option value="INVESTIGACION">Investigación</option><option value="EXPOSICION">Exposición</option><option value="PARTICIPACION">Participación</option><option value="OTRO">Otro</option></select></label><label>Nombre del insumo<input id="gradeName" placeholder="Ej.: Operaciones con números enteros"></label><label>Fecha<input id="gradeDate" type="date" value="${ecuadorDate()}"></label></div><button id="gradeAdd" class="primary" style="margin-top:10px">＋ Agregar insumo</button></div><div id="gradeItems"><div class="card">Cargando insumos…</div></div>`;
+ box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(gradeSubjectLabel(a.asignatura))}</h2><div class="muted">${esc(a.grado)} · ${esc(a.jornada)} · ${gradeStudents.length} estudiantes</div></div><button id="gradeBack">← Asignaturas</button></div><div class="grade-trims">${[1,2,3].map(n=>`<button data-grade-trim="${n}" class="${gradeTrimester===n?'active':''}">${n}.º trimestre</button>`).join('')}</div></div><div class="card"><h3>Evaluación formativa · 70 %</h3><p class="muted">Crea los insumos que necesites durante el trimestre. Los casilleros vacíos significan “todavía no calificado”.</p><div class="grade-form"><label>Tipo<select id="gradeType"><option value="LECCION_ORAL">Lección oral</option><option value="LECCION_ESCRITA">Lección escrita</option><option value="TAREA">Tarea</option><option value="TRABAJO_CLASE">Trabajo en clase</option><option value="TRABAJO_GRUPAL">Trabajo grupal</option><option value="EXPOSICION">Exposición</option><option value="INVESTIGACION">Trabajo de investigación</option><option value="PORTAFOLIO">Portafolio</option></select></label><label>Nombre del insumo<input id="gradeName" placeholder="Ej.: Operaciones con números enteros"></label><label>Fecha<input id="gradeDate" type="date" value="${ecuadorDate()}"></label></div><button id="gradeAdd" class="primary" style="margin-top:10px">＋ Agregar insumo</button></div><div id="gradeItems"><div class="card">Cargando insumos…</div></div>`;
  $('#gradeBack').onclick=showGrades;$$('[data-grade-trim]').forEach(b=>b.onclick=async()=>{gradeTrimester=Number(b.dataset.gradeTrim);await renderGradeWorkspace()});$('#gradeAdd').onclick=createGradeItem;await loadGradeItems();
 }
 async function createGradeItem(){
@@ -225,10 +225,32 @@ async function loadGradeItems(){
  if(error){box.innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}let items=data||[];
  if(!items.length){box.innerHTML='<div class="card"><p class="muted">Todavía no hay insumos en este trimestre.</p></div>';return}
  let ids=items.map(x=>x.id),gr=[];if(ids.length){let r=await sb.from('student_grades').select('grade_item_id,student_id,nota').in('grade_item_id',ids);if(r.error){box.innerHTML='<div class="notice">'+esc(r.error.message)+'</div>';return}gr=r.data||[]}
- box.innerHTML=items.map(it=>{let vals=gr.filter(g=>g.grade_item_id===it.id&&g.nota!==null).map(g=>Number(g.nota));let avg=vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'—';return `<div class="grade-item"><div class="row"><div class="grow"><h4>${esc(it.nombre)}</h4><div class="muted">${esc(gradeTypeName(it.tipo))} · ${esc(it.fecha)} · ${vals.length}/${gradeStudents.length} calificados</div></div><span class="pill">Promedio ${avg}</span><button data-grade-edit="${it.id}">Registrar notas</button></div></div>`}).join('');
+ box.innerHTML=items.map(it=>{let vals=gr.filter(g=>g.grade_item_id===it.id&&g.nota!==null).map(g=>Number(g.nota));let avg=vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(2):'—';return `<div class="grade-item"><div class="row"><div class="grow"><h4>${esc(it.nombre)}</h4><div class="muted">${esc(gradeTypeName(it.tipo))} · ${esc(it.fecha)} · ${vals.length}/${gradeStudents.length} calificados</div></div><span class="pill">Promedio ${avg}</span><button data-grade-edit="${it.id}">Registrar notas</button><button class="danger" data-grade-delete="${it.id}">🗑 Eliminar</button></div></div>`}).join('');
  $$('[data-grade-edit]').forEach(b=>b.onclick=()=>openGradeItem(items.find(x=>x.id===b.dataset.gradeEdit)));
+ $$('[data-grade-delete]').forEach(b=>b.onclick=()=>deleteGradeItem(items.find(x=>x.id===b.dataset.gradeDelete)));
 }
-function gradeTypeName(t){return ({TAREA:'Tarea',LECCION:'Lección',TRABAJO_INDIVIDUAL:'Trabajo individual',TRABAJO_GRUPAL:'Trabajo grupal',INVESTIGACION:'Investigación',EXPOSICION:'Exposición',PARTICIPACION:'Participación',OTRO:'Otro'})[t]||t}
+async function deleteGradeItem(item){
+ if(!item)return;
+ let ok=confirm(`¿Eliminar el insumo "${item.nombre}"?\n\nTambién se eliminarán las calificaciones y mejoras registradas para esta actividad. Esta acción no se puede deshacer.`);
+ if(!ok)return;
+ let {error}=await sb.from('grade_items').delete().eq('id',item.id);
+ if(error){toast('No se pudo eliminar el insumo: '+error.message,true);return}
+ toast('✓ Insumo eliminado');await loadGradeItems();
+}
+function gradeTypeName(t){return ({
+ LECCION_ORAL:'Lección oral',
+ LECCION_ESCRITA:'Lección escrita',
+ TAREA:'Tarea',
+ TRABAJO_CLASE:'Trabajo en clase',
+ TRABAJO_GRUPAL:'Trabajo grupal',
+ EXPOSICION:'Exposición',
+ INVESTIGACION:'Trabajo de investigación',
+ PORTAFOLIO:'Portafolio',
+ LECCION:'Lección',
+ TRABAJO_INDIVIDUAL:'Trabajo individual',
+ PARTICIPACION:'Participación',
+ OTRO:'Otro'
+})[t]||t}
 function effectiveGradeLocal(original,imp){
  let o=Number(original);
  if(!Number.isFinite(o))return null;
