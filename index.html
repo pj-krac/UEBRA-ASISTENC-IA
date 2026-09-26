@@ -344,7 +344,7 @@ async function loadProjectSection(){
        </div>
        <div class="project-compact-input">
         <label>Mi aporte</label>
-        <input class="project-input" type="number" inputmode="decimal" min="0" max="10" step="0.01" placeholder="—" value="${r.nota_aporte==null?'':esc(r.nota_aporte)}">
+        <input class="project-input" type="text" inputmode="decimal" autocomplete="off" placeholder="—" value="${r.nota_aporte==null?'':esc(inputGrade(r.nota_aporte))}">
        </div>
       </div>
       <div class="project-compact-bottom">
@@ -375,7 +375,7 @@ async function saveProjectContributions(existingRows){
    continue;
   }
 
-  let nota=Number(raw);
+  let nota=parseGrade(raw);
   if(!Number.isFinite(nota)||nota<0||nota>10){
    toast('Las notas del proyecto deben estar entre 0 y 10.',true);
    return;
@@ -457,7 +457,20 @@ function effectiveGradeLocal(original,imp){
  }
  return o;
 }
-function fmtGrade(n){return n==null||!Number.isFinite(Number(n))?'—':Number(n).toFixed(2)}
+function parseGrade(v){
+ if(v==null)return NaN;
+ let s=String(v).trim().replace(/\s/g,'').replace(',','.');
+ if(s==='')return NaN;
+ return Number(s);
+}
+function inputGrade(v){
+ if(v==null||v==='')return '';
+ let n=Number(v);
+ return Number.isFinite(n)?n.toFixed(2).replace('.',','):'';
+}
+function fmtGrade(n){
+ return n==null||!Number.isFinite(Number(n))?'—':Number(n).toFixed(2).replace('.',',');
+}
 async function openGradeItem(item){
  let box=$('#gradesBody');box.innerHTML='<div class="card">Cargando calificaciones…</div>';
  let {data,error}=await sb.from('student_grades').select('id,student_id,nota,observacion').eq('grade_item_id',item.id);
@@ -477,7 +490,7 @@ async function openGradeItem(item){
    return `<div class="grade-student-v2" data-grade-student="${st.id}">
     <div class="grade-student-main">
      <div><b>${i+1}. ${esc(st.nombre)}</b><div class="muted">${esc(st.cedula||'')}</div></div>
-     <input class="grade-input" type="number" inputmode="decimal" min="0" max="10" step="0.01" placeholder="—" value="${g?.nota==null?'':esc(g.nota)}">
+     <input class="grade-input" type="text" inputmode="decimal" autocomplete="off" placeholder="—" value="${g?.nota==null?'':esc(inputGrade(g.nota))}">
     </div>
     ${g?.nota!=null?`<div class="grade-result-row">
       <span class="grade-original">Original: ${fmtGrade(g.nota)}</span>
@@ -500,7 +513,7 @@ async function saveGradeItem(item){
  for(let r of rows){
   let raw=r.querySelector('.grade-input').value.trim();
   if(raw==='')continue;
-  let nota=Number(raw);
+  let nota=parseGrade(raw);
   if(!Number.isFinite(nota)||nota<0||nota>10){toast('Todas las notas deben estar entre 0 y 10.',true);r.querySelector('.grade-input').focus();return}
   payload.push({grade_item_id:item.id,student_id:r.dataset.gradeStudent,nota});
  }
@@ -528,15 +541,15 @@ function openGradeImprovement(item,st,g,imp){
    ?'<b>Mejora con refuerzo.</b> Se promedian la nota original + trabajo de refuerzo + evaluación de mejora. La nota definitiva no puede superar 7,50 y nunca puede ser inferior a la original.'
    :'<b>Mejora directa.</b> Se promedian la nota original + evaluación de mejora. La nota definitiva no puede superar 9,00 y nunca puede ser inferior a la original.'}</div>
   <div class="improve-grid">
-   ${withReinforcement?`<label>Trabajo de refuerzo<input id="improveReinforcement" type="number" inputmode="decimal" min="0" max="10" step="0.01" value="${imp?.nota_trabajo_refuerzo==null?'':esc(imp.nota_trabajo_refuerzo)}" placeholder="0,00 a 10,00"></label>`:''}
-   <label>Evaluación de mejora<input id="improveEvaluation" type="number" inputmode="decimal" min="0" max="10" step="0.01" value="${imp?.nota_evaluacion_mejora==null?'':esc(imp.nota_evaluacion_mejora)}" placeholder="0,00 a 10,00"></label>
+   ${withReinforcement?`<label>Trabajo de refuerzo<input id="improveReinforcement" type="text" inputmode="decimal" autocomplete="off" value="${imp?.nota_trabajo_refuerzo==null?'':esc(inputGrade(imp.nota_trabajo_refuerzo))}" placeholder="0,00 a 10,00"></label>`:''}
+   <label>Evaluación de mejora<input id="improveEvaluation" type="text" inputmode="decimal" autocomplete="off" value="${imp?.nota_evaluacion_mejora==null?'':esc(inputGrade(imp.nota_evaluacion_mejora))}" placeholder="0,00 a 10,00"></label>
   </div>
   <div id="improvePreview" class="improve-preview">Nota definitiva: ${fmtGrade(finalNow)}</div>
   <div class="row"><button id="improveSave" class="primary grow">${imp?'Actualizar mejora':'Guardar mejora'}</button>${imp?'<button id="improveDelete" class="danger">Eliminar mejora</button>':''}</div>
  </div>`;
  $('#improveBack').onclick=()=>openGradeItem(item);
  let preview=()=>{
-  let e=Number($('#improveEvaluation').value),r=withReinforcement?Number($('#improveReinforcement').value):null;
+  let e=parseGrade($('#improveEvaluation').value),r=withReinforcement?parseGrade($('#improveReinforcement').value):null;
   if(!Number.isFinite(e)||(withReinforcement&&!Number.isFinite(r))){$('#improvePreview').textContent='Nota definitiva: —';return}
   let tmp={nota_evaluacion_mejora:e,nota_trabajo_refuerzo:r};
   $('#improvePreview').textContent='Nota definitiva: '+fmtGrade(effectiveGradeLocal(original,tmp));
@@ -547,7 +560,7 @@ function openGradeImprovement(item,st,g,imp){
 }
 async function saveGradeImprovement(item,st,g,imp,withReinforcement){
  let evalRaw=$('#improveEvaluation').value.trim(),refRaw=withReinforcement?$('#improveReinforcement').value.trim():'';
- let evalN=Number(evalRaw),refN=withReinforcement?Number(refRaw):null;
+ let evalN=parseGrade(evalRaw),refN=withReinforcement?parseGrade(refRaw):null;
  if(evalRaw===''||!Number.isFinite(evalN)||evalN<0||evalN>10){toast('Ingresa una evaluación de mejora entre 0 y 10.',true);return}
  if(withReinforcement&&(refRaw===''||!Number.isFinite(refN)||refN<0||refN>10)){toast('Ingresa la nota del trabajo de refuerzo entre 0 y 10.',true);return}
  let payload={
