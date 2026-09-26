@@ -67,13 +67,24 @@
 .calendar-admin-date{font-weight:800;color:#10233d}.calendar-admin-motive{font-weight:700;margin-top:5px}
 .calendar-admin-meta{font-size:12px;color:#667085;margin-top:3px}.calendar-admin-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px}
 @media(max-width:700px){.calendar-admin-grid{grid-template-columns:1fr}}
+
+.missing-class-card{border:1px solid #f0d5d2;border-radius:13px;padding:12px;margin:9px 0;background:#fff}
+.missing-class-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.missing-class-date{font-weight:800;color:#10233d}
+.missing-class-badge{background:#fef3f2;color:#b42318;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:800;white-space:nowrap}
+.missing-class-subject{font-weight:800;margin-top:7px}
+.missing-class-meta{font-size:12px;color:#667085;line-height:1.45;margin-top:3px}
+.missing-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}
+.missing-summary>div{background:#f7f9fc;border-radius:11px;padding:10px;text-align:center;font-size:11px;color:#667085}
+.missing-summary b{display:block;font-size:20px;color:#174d7f}
+@media(max-width:700px){.missing-summary{grid-template-columns:repeat(3,1fr)}}
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
 <section id="hoy"><div id="todayclasses"></div><div id="attendance" class="hide"><div class="card classnow"><div class="row"><div class="grow"><h2 id="classTitle"></h2><div id="classMeta" class="muted"></div></div><button id="backClasses">← Clases</button></div></div><div class="row"><button id="allP">Marcar todos P</button><span id="summary" class="grow muted"></span></div><div id="students"></div><div class="toolbar"><button id="saveAtt" class="primary wide">Guardar y sincronizar asistencia</button></div></div></section>
 <section id="historial" class="hide"><div class="card"><h2>Historial</h2><p class="muted">Últimos registros realizados con tu usuario.</p><div id="historyList"></div></div></section>
 <section id="novedades" class="hide"><div id="noticesBody"></div></section>
-<section id="admin" class="hide"><div class="card"><h2>Panel administrador</h2><div class="admin-grid"><button data-admin="students">👨‍🎓 Estudiantes</button><button data-admin="teachers">👨‍🏫 Docentes</button><button data-admin="schedules">🗓 Horarios</button><button data-admin="reports">📊 Reportes</button><button data-admin="followup">📈 Seguimiento directivo</button><button data-admin="calendar">📅 Calendario institucional</button><button data-admin="attendance">📝 Registrar asistencia</button></div></div><div id="adminBody"></div></section>
+<section id="admin" class="hide"><div class="card"><h2>Panel administrador</h2><div class="admin-grid"><button data-admin="students">👨‍🎓 Estudiantes</button><button data-admin="teachers">👨‍🏫 Docentes</button><button data-admin="schedules">🗓 Horarios</button><button data-admin="reports">📊 Reportes</button><button data-admin="followup">📈 Seguimiento directivo</button><button data-admin="missing">📋 Clases sin registro</button><button data-admin="calendar">📅 Calendario institucional</button><button data-admin="attendance">📝 Registrar asistencia</button></div></div><div id="adminBody"></div></section>
 </main></div><div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];let sb=null,profile=null,teacher=null,currentSchedule=null,currentStudents=[],currentSession=null;
@@ -151,7 +162,7 @@ async function retryOfflineQueue(showMessages=true){
 async function loadHistory(){if(!profile)return;let q=sb.from('attendance_sessions').select('id,fecha,periodo,asignatura,course_id,teacher_id,created_by,created_at,courses(nombre,jornada)').order('fecha',{ascending:false}).order('periodo',{ascending:false}).limit(100);if(profile.rol!=='ADMIN'&&teacher)q=q.eq('teacher_id',teacher.id);else q=q.eq('created_by',profile.id);let {data,error}=await q;if(error){$('#historyList').innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}$('#historyList').innerHTML=`<div class="row" style="margin-bottom:10px"><input id="histDate" type="date" class="obs grow" style="margin:0"><input id="histSearch" class="obs grow" style="margin:0" placeholder="Buscar curso o asignatura"></div><div id="histRows"></div>`;let render=()=>{let date=$('#histDate').value,txt=($('#histSearch').value||'').toUpperCase();let a=(data||[]).filter(x=>(!date||x.fecha===date)&&(!txt||`${x.courses?.nombre||''} ${x.asignatura||''}`.toUpperCase().includes(txt)));$('#histRows').innerHTML=a.map(x=>`<div class="listitem row"><div class="grow"><b>${x.fecha} · ${esc(x.courses?.nombre||'')}</b><div class="muted">${esc(x.asignatura)} · ${esc(x.courses?.jornada||'')} · período ${x.periodo||'-'}</div></div><button data-hdetail="${x.id}">Ver detalle</button></div>`).join('')||'<p class="muted">Sin registros para este filtro.</p>';$$('[data-hdetail]').forEach(b=>b.onclick=()=>showSessionDetail(b.dataset.hdetail,'#histRows'))};$('#histDate').onchange=render;$('#histSearch').oninput=render;render()}
 async function showSessionDetail(sessionId,target='#histRows'){let {data:sess,error:e1}=await sb.from('attendance_sessions').select('*,courses(nombre,jornada),teachers(nombre)').eq('id',sessionId).single();if(e1){toast(e1.message,true);return}let {data:marks,error:e2}=await sb.from('attendance').select('estado,observacion,students(nombre,cedula)').eq('session_id',sessionId);if(e2){toast(e2.message,true);return}let c=x=>(marks||[]).filter(m=>m.estado===x).length;let el=$(target);el.innerHTML=`<button id="closeDetail">← Volver</button><div class="card" style="margin-top:10px"><h3>${esc(sess.courses?.nombre||'')} · ${esc(sess.asignatura)}</h3><div class="muted">${sess.fecha} · ${esc(sess.courses?.jornada||'')} · período ${sess.periodo} · ${esc(sess.teachers?.nombre||'')}</div><div class="stats"><div class="stat"><b>${c('P')}</b>P</div><div class="stat"><b>${c('F')}</b>F</div><div class="stat"><b>${c('A')}</b>A</div><div class="stat"><b>${c('J')}</b>J</div></div><div class="tablewrap"><table class="report-table"><thead><tr><th>Estudiante</th><th>Estado</th><th>Observación</th></tr></thead><tbody>${(marks||[]).sort((a,b)=>(a.students?.nombre||'').localeCompare(b.students?.nombre||'')).map(m=>`<tr><td>${esc(m.students?.nombre||'')}<div class="muted tiny">${esc(m.students?.cedula||'')}</div></td><td><span class="status${m.estado}">${m.estado}</span></td><td>${esc(m.observacion||'')}</td></tr>`).join('')}</tbody></table></div></div>`;$('#closeDetail').onclick=()=>loadHistory()}
 $$('.tab').forEach(b=>b.onclick=()=>{let id=b.dataset.tab;$$('.tab').forEach(x=>x.classList.toggle('active',x===b));['hoy','historial','novedades','admin'].forEach(x=>$('#'+x).classList.toggle('hide',x!==id));if(id==='admin')showStudents();if(id==='novedades')showNotices()});
-$$('[data-admin]').forEach(b=>b.onclick=()=>({students:showStudents,teachers:showTeachers,schedules:showSchedules,reports:showReports,followup:showDirectiveFollowup,calendar:showSchoolCalendar,attendance:showAdminAttendance}[b.dataset.admin]||(()=>{}))());
+$$('[data-admin]').forEach(b=>b.onclick=()=>({students:showStudents,teachers:showTeachers,schedules:showSchedules,reports:showReports,followup:showDirectiveFollowup,missing:showMissingClasses,calendar:showSchoolCalendar,attendance:showAdminAttendance}[b.dataset.admin]||(()=>{}))());
 
 async function showNotices(){
  let box=$('#noticesBody');
@@ -291,6 +302,83 @@ async function saveNotices(){
  $('#nObs').value='';
 }
 
+
+
+async function showMissingClasses(){
+ $('#adminBody').innerHTML=`<div class="card"><h3>📋 Clases sin registro</h3>
+ <p class="muted">Consulta institucional de horas programadas cuyo registro de asistencia no aparece en el sistema. Las excepciones activas del Calendario institucional se excluyen automáticamente.</p>
+ <div class="grid">
+  <label>Desde<input id="mFrom" type="date"></label>
+  <label>Hasta<input id="mTo" type="date"></label>
+  <label>Jornada<select id="mShift"><option value="">Todas</option><option value="MATUTINA">Matutina</option><option value="VESPERTINA">Vespertina</option></select></label>
+  <label>Curso<select id="mCourse"><option value="">Todos</option></select></label>
+  <label>Docente<select id="mTeacher"><option value="">Todos</option></select></label>
+ </div>
+ <div class="row" style="margin-top:10px"><button id="mRun" class="primary">Actualizar</button><button id="mToday">Solo hoy</button></div>
+ </div>
+ <div id="missingResults" class="card"><div class="muted">Selecciona el período y pulsa Actualizar.</div></div>`;
+
+ let today=ecuadorDate(), d=new Date(today+'T12:00:00');
+ d.setDate(d.getDate()-6);
+ $('#mFrom').value=d.toISOString().slice(0,10); $('#mTo').value=today;
+
+ let [cr,tr]=await Promise.all([
+  sb.from('courses').select('id,nombre,jornada').order('nombre'),
+  sb.from('teachers').select('id,nombre').eq('activo',true).order('nombre')
+ ]);
+ if(!cr.error) $('#mCourse').innerHTML='<option value="">Todos</option>'+(cr.data||[]).map(x=>`<option value="${x.id}">${esc(x.nombre)} · ${esc(x.jornada)}</option>`).join('');
+ if(!tr.error) $('#mTeacher').innerHTML='<option value="">Todos</option>'+(tr.data||[]).map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join('');
+
+ $('#mRun').onclick=runMissingClasses;
+ $('#mToday').onclick=()=>{$('#mFrom').value=today;$('#mTo').value=today;runMissingClasses()};
+ await runMissingClasses();
+}
+
+async function runMissingClasses(){
+ let box=$('#missingResults'),from=$('#mFrom').value,to=$('#mTo').value,shift=$('#mShift').value,cid=$('#mCourse').value,tid=$('#mTeacher').value;
+ if(!from||!to){box.innerHTML='<div class="notice">Selecciona Desde y Hasta.</div>';return}
+ box.innerHTML='<div class="muted">Calculando clases sin registro…</div>';
+
+ let sq=sb.from('schedules').select('id,dia,periodo,asignatura,teacher_id,course_id,teachers(nombre),courses(nombre,jornada)').eq('activo',true);
+ if(cid)sq=sq.eq('course_id',cid); if(tid)sq=sq.eq('teacher_id',tid);
+ let sr=await sq;
+ if(sr.error){box.innerHTML='<div class="notice">'+esc(sr.error.message)+'</div>';return}
+ let schedules=(sr.data||[]).filter(s=>!shift||s.courses?.jornada===shift);
+
+ let cal=await sb.from('school_calendar_exceptions').select('fecha,jornada').eq('activo',true).gte('fecha',from).lte('fecha',to);
+ if(cal.error){box.innerHTML='<div class="notice">'+esc(cal.error.message)+'</div>';return}
+ let excluded=new Set((cal.data||[]).filter(x=>!x.jornada||!shift||x.jornada===shift).map(x=>x.fecha));
+
+ const datesBetween=(a,b)=>{
+  let out=[],[ay,am,ad]=a.split('-').map(Number),[by,bm,bd]=b.split('-').map(Number);
+  let d=new Date(Date.UTC(ay,am-1,ad)),end=new Date(Date.UTC(by,bm-1,bd));
+  while(d<=end){let iso=d.toISOString().slice(0,10),wd=d.getUTCDay();if(wd>=1&&wd<=5&&!excluded.has(iso))out.push({iso,dia:wd});d.setUTCDate(d.getUTCDate()+1)}
+  return out;
+ };
+ let dates=datesBetween(from,to), expected=[];
+ schedules.forEach(s=>dates.filter(d=>d.dia===Number(s.dia)).forEach(d=>expected.push({
+  fecha:d.iso,periodo:Number(s.periodo),asignatura:s.asignatura||'',teacher_id:s.teacher_id,course_id:s.course_id,
+  teacher:s.teachers?.nombre||'',course:s.courses?.nombre||'',jornada:s.courses?.jornada||''
+ })));
+
+ let ssq=sb.from('attendance_sessions').select('fecha,periodo,asignatura,teacher_id,course_id').gte('fecha',from).lte('fecha',to);
+ if(cid)ssq=ssq.eq('course_id',cid);if(tid)ssq=ssq.eq('teacher_id',tid);
+ let ssr=await ssq;
+ if(ssr.error){box.innerHTML='<div class="notice">'+esc(ssr.error.message)+'</div>';return}
+ let sessions=(ssr.data||[]);
+ const key=x=>`${x.fecha}|${x.teacher_id}|${x.course_id}|${Number(x.periodo)}|${String(x.asignatura||'').trim().toUpperCase()}`;
+ let registered=new Set(sessions.map(key));
+ let missing=expected.filter(x=>!registered.has(key(x))).sort((a,b)=>b.fecha.localeCompare(a.fecha)||a.periodo-b.periodo||a.teacher.localeCompare(b.teacher,'es'));
+
+ let teacherCount=new Set(missing.map(x=>x.teacher_id)).size,courseCount=new Set(missing.map(x=>x.course_id)).size;
+ box.innerHTML=`<h3>Resultado</h3>
+ <div class="missing-summary"><div><b>${missing.length}</b>Sin registro</div><div><b>${teacherCount}</b>Docentes</div><div><b>${courseCount}</b>Cursos</div></div>
+ ${missing.length?missing.map(x=>`<div class="missing-class-card">
+  <div class="missing-class-head"><div class="missing-class-date">${formatDirectiveDate(x.fecha)} · Período ${x.periodo}</div><div class="missing-class-badge">⚠ Sin registro</div></div>
+  <div class="missing-class-subject">${esc(x.asignatura||'Sin asignatura')}</div>
+  <div class="missing-class-meta"><b>${esc(x.teacher)}</b><br>${esc(x.course)} · ${esc(x.jornada)}</div>
+ </div>`).join(''):'<div class="notice">✓ No se encontraron clases sin registro para los filtros seleccionados.</div>'}`;
+}
 
 function resetSchoolCalendarForm(){
  let id=$('#calId'); if(id)id.value='';
