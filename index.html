@@ -210,8 +210,11 @@ async function openGradeAssignment(a){
 }
 async function renderGradeWorkspace(){
  let a=gradeAssignment,box=$('#gradesBody');if(!a)return showGrades();
- box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(gradeSubjectLabel(a.asignatura))}</h2><div class="muted">${esc(a.grado)} · ${esc(a.jornada)} · ${gradeStudents.length} estudiantes</div></div><button id="gradeBack">← Asignaturas</button></div><div class="grade-trims">${[1,2,3].map(n=>`<button data-grade-trim="${n}" class="${gradeTrimester===n?'active':''}">${n}.º trimestre</button>`).join('')}</div></div><div class="card"><h3>Evaluación formativa · 70 %</h3><p class="muted">Crea los insumos que necesites durante el trimestre. Los casilleros vacíos significan “todavía no calificado”.</p><div class="grade-form"><label>Tipo<select id="gradeType"><option value="LECCION_ORAL">Lección oral</option><option value="LECCION_ESCRITA">Lección escrita</option><option value="TAREA">Tarea</option><option value="TRABAJO_CLASE">Trabajo en clase</option><option value="TRABAJO_GRUPAL">Trabajo grupal</option><option value="EXPOSICION">Exposición</option><option value="INVESTIGACION">Trabajo de investigación</option><option value="PORTAFOLIO">Portafolio</option></select></label><label>Nombre del insumo<input id="gradeName" placeholder="Ej.: Operaciones con números enteros"></label><label>Fecha<input id="gradeDate" type="date" value="${ecuadorDate()}"></label></div><button id="gradeAdd" class="primary" style="margin-top:10px">＋ Agregar insumo</button></div><div id="gradeItems"><div class="card">Cargando insumos…</div></div>`;
- $('#gradeBack').onclick=showGrades;$$('[data-grade-trim]').forEach(b=>b.onclick=async()=>{gradeTrimester=Number(b.dataset.gradeTrim);await renderGradeWorkspace()});$('#gradeAdd').onclick=createGradeItem;await loadGradeItems();
+ box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(gradeSubjectLabel(a.asignatura))}</h2><div class="muted">${esc(a.grado)} · ${esc(a.jornada)} · ${gradeStudents.length} estudiantes</div></div><button id="gradeBack">← Asignaturas</button></div><div class="grade-trims">${[1,2,3].map(n=>`<button data-grade-trim="${n}" class="${gradeTrimester===n?'active':''}">${n}.º trimestre</button>`).join('')}</div></div><div class="card"><h3>Evaluación formativa · 70 %</h3><p class="muted">Crea los insumos que necesites durante el trimestre. Los casilleros vacíos significan “todavía no calificado”.</p><div class="grade-form"><label>Tipo<select id="gradeType"><option value="LECCION_ORAL">Lección oral</option><option value="LECCION_ESCRITA">Lección escrita</option><option value="TAREA">Tarea</option><option value="TRABAJO_CLASE">Trabajo en clase</option><option value="TRABAJO_GRUPAL">Trabajo grupal</option><option value="EXPOSICION">Exposición</option><option value="INVESTIGACION">Trabajo de investigación</option><option value="PORTAFOLIO">Portafolio</option></select></label><label>Nombre del insumo<input id="gradeName" placeholder="Ej.: Operaciones con números enteros"></label><label>Fecha<input id="gradeDate" type="date" value="${ecuadorDate()}"></label></div><button id="gradeAdd" class="primary" style="margin-top:10px">＋ Agregar insumo</button></div><div id="gradeItems"><div class="card">Cargando insumos…</div></div><div id="gradeProject"><div class="card">Cargando proyecto interdisciplinario…</div></div>`;
+ $('#gradeBack').onclick=showGrades;
+ $$('[data-grade-trim]').forEach(b=>b.onclick=async()=>{gradeTrimester=Number(b.dataset.gradeTrim);await renderGradeWorkspace()});
+ $('#gradeAdd').onclick=createGradeItem;
+ await Promise.all([loadGradeItems(),loadProjectSection()]);
 }
 async function createGradeItem(){
  let nombre=$('#gradeName').value.trim(),tipo=$('#gradeType').value,fecha=$('#gradeDate').value;if(!nombre||!fecha){toast('Escribe el nombre del insumo y selecciona la fecha.',true);return}
@@ -237,6 +240,138 @@ async function deleteGradeItem(item){
  if(error){toast('No se pudo eliminar el insumo: '+error.message,true);return}
  toast('✓ Insumo eliminado');await loadGradeItems();
 }
+
+async function loadProjectSection(){
+ let box=$('#gradeProject');if(!box||!gradeAssignment)return;
+ box.innerHTML='<div class="card">Cargando proyecto interdisciplinario…</div>';
+
+ let {data,error}=await sb.rpc('project_subject_roster',{
+  p_course_id:gradeAssignment.course_id,
+  p_asignatura:gradeAssignment.asignatura,
+  p_trimestre:gradeTrimester
+ });
+
+ if(error){
+  let msg=String(error.message||'');
+  if(msg.toLowerCase().includes('no participa')||msg.toLowerCase().includes('not authorized')||msg.toLowerCase().includes('no autorizado')){
+   box.innerHTML='';
+   return;
+  }
+  box.innerHTML='<div class="notice">No se pudo cargar el proyecto interdisciplinario: '+esc(msg)+'</div>';
+  return;
+ }
+
+ let rows=data||[];
+ if(!rows.length){
+  box.innerHTML='<div class="card"><h3>Proyecto interdisciplinario · 30 %</h3><p class="muted">No hay estudiantes activos en este curso.</p></div>';
+  return;
+ }
+
+ let completos=rows.filter(r=>r.proyecto_completo).length;
+ let esperado=Number(rows[0].asignaturas_esperadas||0);
+ let estadoGeneral=completos===rows.length?'Completo':'En proceso';
+
+ box.innerHTML=`<div class="card">
+  <div class="grade-head">
+   <div class="grow">
+    <h3>Proyecto interdisciplinario · 30 %</h3>
+    <p class="muted">Registra únicamente el aporte de <b>${esc(gradeSubjectLabel(gradeAssignment.asignatura))}</b>. El promedio del proyecto, la sumativa y la nota trimestral permanecen <b>Pendientes</b> hasta que todas las asignaturas participantes hayan registrado su aporte para cada estudiante.</p>
+   </div>
+   <span class="pill">${esc(estadoGeneral)}</span>
+  </div>
+  <div class="notice" style="margin:10px 0">Asignaturas participantes en este curso: <b>${esperado}</b>. Estudiantes con proyecto completo: <b>${completos}/${rows.length}</b>.</div>
+  <div id="projectStudentRows">
+   ${rows.map((r,i)=>{
+    let avance=`${Number(r.aportes_registrados||0)}/${Number(r.asignaturas_esperadas||0)}`;
+    let completo=!!r.proyecto_completo;
+    return `<div class="grade-student-v2" data-project-student="${r.student_id}">
+      <div class="grade-student-main">
+       <div class="grow"><b>${i+1}. ${esc(r.estudiante)}</b><div class="muted">${esc(r.cedula||'')}</div></div>
+       <label style="min-width:115px">Mi aporte
+        <input class="project-input" type="number" inputmode="decimal" min="0" max="10" step="0.01" placeholder="—" value="${r.nota_aporte==null?'':esc(r.nota_aporte)}">
+       </label>
+      </div>
+      <div class="grade-result-row">
+       <span class="pill">${completo?'✓ Completo':'Pendiente'} · ${avance}</span>
+       <span>Formativa: <b>${fmtGrade(r.promedio_formativo)}</b></span>
+       <span>Promedio proyecto: <b>${completo?fmtGrade(r.promedio_proyecto):'Pendiente'}</b></span>
+       <span>Sumativa: <b>${completo?fmtGrade(r.nota_sumativa):'Pendiente'}</b></span>
+       <span>Trimestral: <b>${completo?fmtGrade(r.nota_trimestral):'Pendiente'}</b></span>
+      </div>
+     </div>`;
+   }).join('')}
+  </div>
+  <div class="toolbar"><button id="projectSave" class="primary wide">Guardar aportes del proyecto</button></div>
+ </div>`;
+
+ $('#projectSave').onclick=()=>saveProjectContributions(rows);
+}
+
+async function saveProjectContributions(existingRows){
+ let btn=$('#projectSave');if(!btn)return;
+ let uiRows=$$('[data-project-student]');
+ let upserts=[],deletes=[];
+
+ for(let row of uiRows){
+  let studentId=row.dataset.projectStudent;
+  let raw=row.querySelector('.project-input').value.trim();
+  let old=existingRows.find(x=>x.student_id===studentId);
+
+  if(raw===''){
+   if(old&&old.nota_aporte!=null)deletes.push(studentId);
+   continue;
+  }
+
+  let nota=Number(raw);
+  if(!Number.isFinite(nota)||nota<0||nota>10){
+   toast('Las notas del proyecto deben estar entre 0 y 10.',true);
+   return;
+  }
+
+  upserts.push({
+   course_id:gradeAssignment.course_id,
+   teacher_id:teacher.id,
+   student_id:studentId,
+   asignatura:gradeAssignment.asignatura,
+   trimestre:gradeTrimester,
+   nota_aporte:nota,
+   created_by:profile.id
+  });
+ }
+
+ btn.disabled=true;btn.textContent='Guardando…';
+
+ if(deletes.length){
+  let q=sb.from('project_grades').delete()
+   .eq('course_id',gradeAssignment.course_id)
+   .eq('teacher_id',teacher.id)
+   .eq('asignatura',gradeAssignment.asignatura)
+   .eq('trimestre',gradeTrimester)
+   .in('student_id',deletes);
+  let {error}=await q;
+  if(error){
+   btn.disabled=false;btn.textContent='Guardar aportes del proyecto';
+   toast('No se pudieron eliminar los aportes vacíos: '+error.message,true);
+   return;
+  }
+ }
+
+ if(upserts.length){
+  let {error}=await sb.from('project_grades').upsert(upserts,{
+   onConflict:'course_id,student_id,asignatura,trimestre'
+  });
+  if(error){
+   btn.disabled=false;btn.textContent='Guardar aportes del proyecto';
+   toast('No se pudieron guardar los aportes: '+error.message,true);
+   return;
+  }
+ }
+
+ btn.disabled=false;btn.textContent='Guardar aportes del proyecto';
+ toast('✓ Aportes del proyecto guardados');
+ await loadProjectSection();
+}
+
 function gradeTypeName(t){return ({
  LECCION_ORAL:'Lección oral',
  LECCION_ESCRITA:'Lección escrita',
