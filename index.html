@@ -49,6 +49,18 @@
 .directive-teacher-mini.missing b{color:#b42318}
 .directive-teacher-mini.ok b{color:#067647}
 
+
+.directive-class-detail{margin-top:12px}
+.directive-class-card{border:1px solid #dce5ef;border-radius:12px;padding:11px;margin:8px 0;background:#fff}
+.directive-class-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.directive-class-date{font-weight:800;color:#10233d}
+.directive-class-status{font-weight:800;font-size:12px;padding:4px 8px;border-radius:999px;white-space:nowrap}
+.directive-class-status.ok{background:#ecfdf3;color:#067647}
+.directive-class-status.missing{background:#fef3f2;color:#b42318}
+.directive-class-subject{font-weight:700;margin-top:7px}
+.directive-class-meta{font-size:12px;color:#667085;margin-top:3px;line-height:1.4}
+.directive-detail-actions{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -415,6 +427,13 @@ async function runDirectiveFollowup(){
    if(e.course_id)t.courses.add(`${e.course} · ${e.jornada}`);
    if(e.asignatura)t.subjects.add(e.asignatura);
  });
+ let teacherExpectedMap=new Map();
+ expected.forEach(e=>{
+   if(!teacherExpectedMap.has(e.teacher_id))teacherExpectedMap.set(e.teacher_id,[]);
+   teacherExpectedMap.get(e.teacher_id).push({...e,registered:registeredKeys.has(keyClass(e))});
+ });
+ window.__directiveTeacherExpected=teacherExpectedMap;
+ window.__directiveTeacherNames=new Map([...teacherMap.entries()].map(([id,t])=>[id,t.name]));
  let teacherRows=[...teacherMap.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));
  box.innerHTML=`<div class="directive-stats">
  <div class="directive-stat"><b>${window.__directiveActiveStudents||0}</b><span>Matrícula activa institucional</span></div>
@@ -459,8 +478,10 @@ async function runDirectiveFollowup(){
     <div class="directive-teacher-mini"><b>${r.nov}</b>Novedades</div>
     <div class="directive-teacher-mini"><b>${r.classes}</b>Sesiones totales</div>
    </div>
+   <button data-dteacher-detail="${r.id}">🔎 Ver detalle de clases</button>
    <button data-dteacher="${r.id}">Ver registros del docente →</button>
  </div>`).join(''):'<div class="muted">No existen horarios o registros docentes para los filtros seleccionados.</div>'}</div>
+ <div id="directiveTeacherClassDetail" class="directive-class-detail"></div>
  </div>
  <div class="card"><h3>👥 Seguimiento por estudiante</h3>
  <p class="muted">Consulta de registros para facilitar el seguimiento directivo. Los indicadores no constituyen sanciones ni valoraciones automáticas.</p>
@@ -476,6 +497,7 @@ async function runDirectiveFollowup(){
    $('#dCourse').value=b.dataset.dcourse;
    runDirectiveFollowup().then(()=>setTimeout(()=>$('#directiveStudentList')?.scrollIntoView({behavior:'smooth',block:'start'}),100));
  });
+ $$('[data-dteacher-detail]').forEach(b=>b.onclick=()=>showDirectiveTeacherClasses(b.dataset.dteacherDetail));
  $$('[data-dteacher]').forEach(b=>b.onclick=()=>{ $('#dTeacher').value=b.dataset.dteacher; runDirectiveFollowup().then(()=>setTimeout(()=>$('#directiveStudentList')?.scrollIntoView({behavior:'smooth',block:'start'}),100)); });
  $$('[data-dfilter]').forEach(b=>b.onclick=()=>{
    window.__directiveFilter=b.dataset.dfilter;
@@ -501,6 +523,37 @@ function formatDirectiveDate(v){
  let s=String(v||'');
  let m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
  return m?`${m[3]}/${m[2]}/${m[1]}`:s;
+}
+
+
+function showDirectiveTeacherClasses(teacherId,mode='all'){
+ const box=$('#directiveTeacherClassDetail'); if(!box)return;
+ let all=(window.__directiveTeacherExpected?.get(teacherId)||[]).slice()
+   .sort((a,b)=>b.fecha.localeCompare(a.fecha)||Number(b.periodo)-Number(a.periodo));
+ let name=window.__directiveTeacherNames?.get(teacherId)||'Docente';
+ let rows=mode==='missing'?all.filter(x=>!x.registered):mode==='registered'?all.filter(x=>x.registered):all;
+ let reg=all.filter(x=>x.registered).length,miss=all.length-reg;
+ box.innerHTML=`<div class="card" style="margin-top:14px">
+   <h3>🔎 Detalle de clases · ${esc(name)}</h3>
+   <div class="muted">${all.length} programadas · ${reg} registradas · ${miss} sin registro</div>
+   <div class="directive-detail-actions">
+    <button data-classmode="all">Todas (${all.length})</button>
+    <button data-classmode="registered">Registradas (${reg})</button>
+    <button data-classmode="missing">Sin registro (${miss})</button>
+    <button data-classclose="1">Cerrar detalle</button>
+   </div>
+   ${rows.length?rows.map(x=>`<div class="directive-class-card">
+      <div class="directive-class-head">
+       <div class="directive-class-date">${formatDirectiveDate(x.fecha)} · Período ${x.periodo}</div>
+       <div class="directive-class-status ${x.registered?'ok':'missing'}">${x.registered?'✓ Registrada':'⚠ Sin registro'}</div>
+      </div>
+      <div class="directive-class-subject">${esc(x.asignatura||'Sin asignatura')}</div>
+      <div class="directive-class-meta">${esc(x.course||'')} · ${esc(x.jornada||'')}</div>
+    </div>`).join(''):'<div class="muted">No existen clases en este filtro.</div>'}
+ </div>`;
+ box.querySelectorAll('[data-classmode]').forEach(b=>b.onclick=()=>showDirectiveTeacherClasses(teacherId,b.dataset.classmode));
+ box.querySelector('[data-classclose]')?.addEventListener('click',()=>box.innerHTML='');
+ box.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 async function showDirectiveStudent(id,from,to){
