@@ -43,6 +43,7 @@
 .directive-course-card button{width:100%;margin-top:11px}
 @media(max-width:700px){.directive-course-grid{grid-template-columns:1fr}}
 
+.directive-teacher-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:12px;margin-top:12px}.directive-teacher-card{border:1px solid #dce5ef;border-radius:15px;padding:14px;background:#fff}.directive-teacher-card h4{margin:0;color:#10233d;font-size:16px}.directive-teacher-meta{font-size:12px;color:#667085;margin-top:4px;line-height:1.4}.directive-teacher-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-top:12px}.directive-teacher-mini{background:#f7f9fc;border-radius:10px;padding:8px 4px;text-align:center;color:#667085;font-size:11px}.directive-teacher-mini b{display:block;color:#174d7f;font-size:18px;margin-bottom:2px}.directive-teacher-card button{width:100%;margin-top:11px}@media(max-width:700px){.directive-teacher-grid{grid-template-columns:1fr}}
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -348,6 +349,12 @@ async function runDirectiveFollowup(){
  notices.forEach(n=>{let x=ensureCourse(n.course_id,n.courses?.nombre,n.courses?.jornada);if(x)x.nov++});
  let courseRows=[...courseMap.values()].sort((a,b)=>String(a.jornada).localeCompare(String(b.jornada),'es')||String(a.name).localeCompare(String(b.name),'es',{numeric:true}));
  window.__directiveCourseRows=courseRows;
+ const teacherMap=new Map();
+ const ensureTeacher=(id,name)=>{if(!id)return null;if(!teacherMap.has(id))teacherMap.set(id,{id,name:name||'',classes:0,courses:new Set(),subjects:new Set(),F:0,A:0,J:0,nov:0});return teacherMap.get(id)};
+ sessions.forEach(s=>{let x=ensureTeacher(s.teacher_id,s.teachers?.nombre);if(!x)return;x.classes++;if(s.course_id)x.courses.add(`${s.courses?.nombre||''} · ${s.courses?.jornada||''}`);if(s.asignatura)x.subjects.add(s.asignatura)});
+ marks.forEach(m=>{let s=smap.get(m.session_id),x=s?teacherMap.get(s.teacher_id):null;if(x&&['F','A','J'].includes(m.estado))x[m.estado]++});
+ notices.forEach(n=>{let x=ensureTeacher(n.teacher_id,n.teachers?.nombre);if(!x)return;x.nov++;if(n.course_id)x.courses.add(`${n.courses?.nombre||''} · ${n.courses?.jornada||''}`);if(n.asignatura)x.subjects.add(n.asignatura)});
+ let teacherRows=[...teacherMap.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name),'es'));
  box.innerHTML=`<div class="directive-stats">
  <div class="directive-stat"><b>${window.__directiveActiveStudents||0}</b><span>Matrícula activa institucional</span></div>
  <div class="directive-stat"><b>${people.size}</b><span>Estudiantes con registros en el período</span></div>
@@ -377,6 +384,7 @@ async function runDirectiveFollowup(){
    <button data-dcourse="${r.id}">Ver estudiantes →</button>
  </div>`).join(''):'<div class="muted">No existen cursos con información para los filtros seleccionados.</div>'}</div>
  </div>
+ <div class="card"><h3>👩‍🏫 Seguimiento por docente</h3><p class="muted">Resumen de registros realizados dentro del período seleccionado. “Clases registradas” corresponde a sesiones de asistencia existentes en el sistema.</p><div class="directive-teacher-grid">${teacherRows.length?teacherRows.map(r=>`<div class="directive-teacher-card"><h4>${esc(r.name)}</h4><div class="directive-teacher-meta">${[...r.subjects].map(esc).join(' · ')||'Sin asignatura registrada'}</div><div class="directive-teacher-stats"><div class="directive-teacher-mini"><b>${r.classes}</b>Clases registradas</div><div class="directive-teacher-mini"><b>${r.courses.size}</b>Cursos</div><div class="directive-teacher-mini"><b>${r.nov}</b>Novedades</div><div class="directive-teacher-mini"><b>${r.F}</b>Faltas registradas</div><div class="directive-teacher-mini"><b>${r.A}</b>Atrasos registrados</div><div class="directive-teacher-mini"><b>${r.J}</b>Justificadas</div></div><button data-dteacher="${r.id}">Ver registros del docente →</button></div>`).join(''):'<div class="muted">No existen registros docentes para los filtros seleccionados.</div>'}</div></div>
  <div class="card"><h3>👥 Seguimiento por estudiante</h3>
  <p class="muted">Consulta de registros para facilitar el seguimiento directivo. Los indicadores no constituyen sanciones ni valoraciones automáticas.</p>
  <div class="directive-quick">
@@ -391,6 +399,7 @@ async function runDirectiveFollowup(){
    $('#dCourse').value=b.dataset.dcourse;
    runDirectiveFollowup().then(()=>setTimeout(()=>$('#directiveStudentList')?.scrollIntoView({behavior:'smooth',block:'start'}),100));
  });
+ $$('[data-dteacher]').forEach(b=>b.onclick=()=>{ $('#dTeacher').value=b.dataset.dteacher; runDirectiveFollowup().then(()=>setTimeout(()=>$('#directiveStudentList')?.scrollIntoView({behavior:'smooth',block:'start'}),100)); });
  $$('[data-dfilter]').forEach(b=>b.onclick=()=>{
    window.__directiveFilter=b.dataset.dfilter;
    $$('[data-dfilter]').forEach(x=>x.classList.toggle('active',x===b));
