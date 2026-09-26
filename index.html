@@ -80,6 +80,29 @@
 @media(max-width:700px){.missing-summary{grid-template-columns:repeat(3,1fr)}}
 
 .grade-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.grade-card{border:1px solid #dce5ef;border-radius:15px;padding:15px;background:#fff}.grade-card h3{margin:0 0 5px;color:#10233d}.grade-card button{width:100%;margin-top:12px}.grade-head{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}.grade-head .grow h2{margin:0 0 5px}.grade-trims{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0}.grade-trims button.active{background:#173f6b;color:#fff;border-color:#173f6b}.grade-item{border:1px solid #e1e7ef;border-radius:13px;padding:12px;margin:9px 0;background:#fff}.grade-item h4{margin:0 0 4px}.grade-input{width:86px;padding:9px;border:1px solid #ccd5df;border-radius:9px;font-size:16px;text-align:center}.grade-student{display:grid;grid-template-columns:minmax(180px,1fr) 90px;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid #edf0f4}.grade-student:last-child{border-bottom:0}.grade-average{font-weight:800;color:#173f6b}.grade-form{display:grid;grid-template-columns:1fr 1.5fr 1fr;gap:9px;align-items:end}.grade-form label{display:grid;gap:5px;font-size:12px;color:#667085}.grade-form input,.grade-form select{padding:10px;border:1px solid #ccd5df;border-radius:9px;background:#fff;min-width:0}@media(max-width:700px){.grade-form{grid-template-columns:1fr}.grade-trims{grid-template-columns:1fr 1fr 1fr}.tabs{overflow-x:auto;grid-template-columns:repeat(5,minmax(95px,1fr))}}
+
+/* ===== UEBRA CALIFICACIONES V2 · MEJORA DE CALIFICACIÓN ===== */
+.tabs{scrollbar-width:thin}
+@media(max-width:700px){
+  .tabs{display:flex;overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity}
+  .tab{flex:0 0 auto;min-width:105px;white-space:nowrap;scroll-snap-align:start}
+}
+.grade-student-v2{border-bottom:1px solid #edf0f4;padding:12px 0}
+.grade-student-v2:last-child{border-bottom:0}
+.grade-student-main{display:grid;grid-template-columns:minmax(180px,1fr) 90px;gap:10px;align-items:center}
+.grade-result-row{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:7px}
+.grade-original{font-size:12px;color:#667085}
+.grade-final{font-size:12px;font-weight:800;color:#173f6b;background:#eef5fb;border-radius:999px;padding:5px 8px}
+.grade-improved{background:#e8f7ed;color:#176b36}
+.grade-improve-btn{padding:7px 10px;font-size:12px}
+.improve-box{border:1px solid #dce5ef;border-radius:14px;padding:14px;background:#fff}
+.improve-rule{padding:11px;border-radius:11px;background:#f7f9fc;border:1px solid #e3e8ef;margin:10px 0;font-size:13px;line-height:1.45}
+.improve-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.improve-grid label{display:grid;gap:5px;font-size:12px;color:#667085}
+.improve-grid input{padding:11px;border:1px solid #ccd5df;border-radius:9px;font-size:16px;min-width:0}
+.improve-preview{margin:12px 0;padding:12px;border-radius:12px;background:#eef5fb;font-weight:800;color:#173f6b}
+@media(max-width:620px){.improve-grid{grid-template-columns:1fr}}
+
 </style></head><body>
 <div id="login" class="wrap"><div class="card login"><img src="./logo-uebra.png"><h2>UEBRA · ASISTENCIA</h2><p class="muted" style="text-align:center">Año lectivo 2026–2027 · Sistema sincronizado</p><div id="cfgwarn" class="notice hide">Falta conectar Supabase. Revisa <b>config.js</b>.</div><label class="field">Correo institucional<input id="email" type="email" autocomplete="username"></label><label class="field">Contraseña<input id="password" type="password" autocomplete="current-password"></label><button id="signin" class="primary wide">Iniciar sesión</button><p id="loginmsg" class="muted"></p></div></div>
 <div id="app" class="hide"><header><img src="./logo-uebra.png"><div><h1>UEBRA · ASISTENCIA</h1><p id="who">Cargando usuario…</p></div><span id="sync" class="sync">● conectado</span></header><div class="tabs"><button class="tab active" data-tab="hoy">Hoy</button><button class="tab" data-tab="historial">Historial</button><button class="tab" data-tab="novedades">Novedades</button><button class="tab" data-tab="calificaciones">Calificaciones</button><button id="adminTab" class="tab hide" data-tab="admin">Administrar</button></div><main class="wrap">
@@ -206,19 +229,136 @@ async function loadGradeItems(){
  $$('[data-grade-edit]').forEach(b=>b.onclick=()=>openGradeItem(items.find(x=>x.id===b.dataset.gradeEdit)));
 }
 function gradeTypeName(t){return ({TAREA:'Tarea',LECCION:'Lección',TRABAJO_INDIVIDUAL:'Trabajo individual',TRABAJO_GRUPAL:'Trabajo grupal',INVESTIGACION:'Investigación',EXPOSICION:'Exposición',PARTICIPACION:'Participación',OTRO:'Otro'})[t]||t}
+function effectiveGradeLocal(original,imp){
+ let o=Number(original);
+ if(!Number.isFinite(o))return null;
+ if(!imp)return o;
+ let evalMejora=Number(imp.nota_evaluacion_mejora);
+ if(!Number.isFinite(evalMejora))return o;
+ if(o<7){
+  let ref=Number(imp.nota_trabajo_refuerzo);
+  if(!Number.isFinite(ref))return o;
+  let calc=(o+ref+evalMejora)/3;
+  return Math.max(o,Math.min(calc,7.5));
+ }
+ if(o<9){
+  let calc=(o+evalMejora)/2;
+  return Math.max(o,Math.min(calc,9));
+ }
+ return o;
+}
+function fmtGrade(n){return n==null||!Number.isFinite(Number(n))?'—':Number(n).toFixed(2)}
 async function openGradeItem(item){
- let box=$('#gradesBody');box.innerHTML='<div class="card">Cargando calificaciones…</div>';let {data,error}=await sb.from('student_grades').select('student_id,nota,observacion').eq('grade_item_id',item.id);if(error){box.innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}let map=new Map((data||[]).map(x=>[x.student_id,x]));
- box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(item.nombre)}</h2><div class="muted">${esc(gradeSubjectLabel(gradeAssignment.asignatura))} · ${esc(gradeAssignment.grado)} · ${gradeTrimester}.º trimestre · ${esc(gradeTypeName(item.tipo))}</div></div><button id="gradeItemBack">← Insumos</button></div></div><div class="card"><div class="row"><b class="grow">Nómina de estudiantes</b><span class="muted">Nota de 0 a 10</span></div><div id="gradeStudentRows">${gradeStudents.map((st,i)=>{let g=map.get(st.id);return `<div class="grade-student" data-grade-student="${st.id}"><div><b>${i+1}. ${esc(st.nombre)}</b><div class="muted">${esc(st.cedula||'')}</div></div><input class="grade-input" type="number" inputmode="decimal" min="0" max="10" step="0.01" placeholder="—" value="${g?.nota==null?'':esc(g.nota)}"></div>`}).join('')}</div><div class="toolbar"><button id="gradeSave" class="primary wide">Guardar calificaciones</button></div></div>`;
- $('#gradeItemBack').onclick=renderGradeWorkspace;$('#gradeSave').onclick=()=>saveGradeItem(item);
+ let box=$('#gradesBody');box.innerHTML='<div class="card">Cargando calificaciones…</div>';
+ let {data,error}=await sb.from('student_grades').select('id,student_id,nota,observacion').eq('grade_item_id',item.id);
+ if(error){box.innerHTML='<div class="notice">'+esc(error.message)+'</div>';return}
+ let grades=data||[],map=new Map(grades.map(x=>[x.student_id,x]));
+ let gradeIds=grades.map(x=>x.id),improvements=[];
+ if(gradeIds.length){
+  let r=await sb.from('grade_improvements').select('*').in('student_grade_id',gradeIds);
+  if(r.error){box.innerHTML='<div class="notice">No se pudieron cargar las mejoras: '+esc(r.error.message)+'</div>';return}
+  improvements=r.data||[];
+ }
+ let impMap=new Map(improvements.map(x=>[x.student_grade_id,x]));
+ box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>${esc(item.nombre)}</h2><div class="muted">${esc(gradeSubjectLabel(gradeAssignment.asignatura))} · ${esc(gradeAssignment.grado)} · ${gradeTrimester}.º trimestre · ${esc(gradeTypeName(item.tipo))}</div></div><button id="gradeItemBack">← Insumos</button></div></div>
+ <div class="card"><div class="row"><b class="grow">Nómina de estudiantes</b><span class="muted">Nota de 0 a 10</span></div>
+ <div id="gradeStudentRows">${gradeStudents.map((st,i)=>{
+   let g=map.get(st.id),imp=g?impMap.get(g.id):null,final=g?.nota==null?null:effectiveGradeLocal(g.nota,imp),canImprove=g?.nota!=null&&Number(g.nota)<9;
+   return `<div class="grade-student-v2" data-grade-student="${st.id}">
+    <div class="grade-student-main">
+     <div><b>${i+1}. ${esc(st.nombre)}</b><div class="muted">${esc(st.cedula||'')}</div></div>
+     <input class="grade-input" type="number" inputmode="decimal" min="0" max="10" step="0.01" placeholder="—" value="${g?.nota==null?'':esc(g.nota)}">
+    </div>
+    ${g?.nota!=null?`<div class="grade-result-row">
+      <span class="grade-original">Original: ${fmtGrade(g.nota)}</span>
+      <span class="grade-final ${imp?'grade-improved':''}">${imp?'Definitiva':'Actual'}: ${fmtGrade(final)}</span>
+      ${imp?'<span class="pill">✓ Mejora registrada</span>':''}
+      ${canImprove?`<button type="button" class="grade-improve-btn" data-improve-student="${st.id}">${imp?'Editar mejora':'Mejora de calificación'}</button>`:''}
+     </div>`:''}
+   </div>`
+ }).join('')}</div>
+ <div class="toolbar"><button id="gradeSave" class="primary wide">Guardar calificaciones</button></div></div>`;
+ $('#gradeItemBack').onclick=renderGradeWorkspace;
+ $('#gradeSave').onclick=()=>saveGradeItem(item);
+ $$('[data-improve-student]').forEach(b=>b.onclick=()=>{
+  let st=gradeStudents.find(x=>x.id===b.dataset.improveStudent),g=map.get(st.id),imp=impMap.get(g.id)||null;
+  openGradeImprovement(item,st,g,imp);
+ });
 }
 async function saveGradeItem(item){
- let rows=$$('[data-grade-student]'),payload=[];for(let r of rows){let raw=r.querySelector('.grade-input').value.trim();if(raw==='')continue;let nota=Number(raw);if(!Number.isFinite(nota)||nota<0||nota>10){toast('Todas las notas deben estar entre 0 y 10.',true);r.querySelector('.grade-input').focus();return}payload.push({grade_item_id:item.id,student_id:r.dataset.gradeStudent,nota})}
+ let rows=$$('[data-grade-student]'),payload=[];
+ for(let r of rows){
+  let raw=r.querySelector('.grade-input').value.trim();
+  if(raw==='')continue;
+  let nota=Number(raw);
+  if(!Number.isFinite(nota)||nota<0||nota>10){toast('Todas las notas deben estar entre 0 y 10.',true);r.querySelector('.grade-input').focus();return}
+  payload.push({grade_item_id:item.id,student_id:r.dataset.gradeStudent,nota});
+ }
  let btn=$('#gradeSave');btn.disabled=true;btn.textContent='Guardando…';
- // Borra únicamente notas que el docente dejó vacías y conserva/actualiza las ingresadas.
- let entered=new Set(payload.map(x=>x.student_id));let empties=rows.filter(r=>!entered.has(r.dataset.gradeStudent)).map(r=>r.dataset.gradeStudent);
- if(empties.length){let d=await sb.from('student_grades').delete().eq('grade_item_id',item.id).in('student_id',empties);if(d.error){btn.disabled=false;btn.textContent='Guardar calificaciones';toast(d.error.message,true);return}}
- if(payload.length){let r=await sb.from('student_grades').upsert(payload,{onConflict:'grade_item_id,student_id'});if(r.error){btn.disabled=false;btn.textContent='Guardar calificaciones';toast(r.error.message,true);return}}
+ let entered=new Set(payload.map(x=>x.student_id));
+ let empties=rows.filter(r=>!entered.has(r.dataset.gradeStudent)).map(r=>r.dataset.gradeStudent);
+ if(empties.length){
+  let d=await sb.from('student_grades').delete().eq('grade_item_id',item.id).in('student_id',empties);
+  if(d.error){btn.disabled=false;btn.textContent='Guardar calificaciones';toast(d.error.message,true);return}
+ }
+ if(payload.length){
+  let r=await sb.from('student_grades').upsert(payload,{onConflict:'grade_item_id,student_id'});
+  if(r.error){btn.disabled=false;btn.textContent='Guardar calificaciones';toast(r.error.message,true);return}
+ }
  btn.disabled=false;btn.textContent='Guardar calificaciones';toast('✓ Calificaciones guardadas');await openGradeItem(item);
+}
+function openGradeImprovement(item,st,g,imp){
+ let original=Number(g.nota),withReinforcement=original<7,box=$('#gradesBody');
+ if(original>=9){toast('Las notas de 9,00 o más no requieren mejora.',true);return}
+ let finalNow=effectiveGradeLocal(original,imp);
+ box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>Mejora de calificación</h2><div class="muted">${esc(st.nombre)} · ${esc(item.nombre)}</div></div><button id="improveBack">← Volver</button></div></div>
+ <div class="improve-box">
+  <div class="row"><div class="grow"><b>Nota original</b><div class="muted">${esc(gradeSubjectLabel(gradeAssignment.asignatura))} · ${gradeTrimester}.º trimestre</div></div><span class="grade-final">${fmtGrade(original)}</span></div>
+  <div class="improve-rule">${withReinforcement
+   ?'<b>Mejora con refuerzo.</b> Se promedian la nota original + trabajo de refuerzo + evaluación de mejora. La nota definitiva no puede superar 7,50 y nunca puede ser inferior a la original.'
+   :'<b>Mejora directa.</b> Se promedian la nota original + evaluación de mejora. La nota definitiva no puede superar 9,00 y nunca puede ser inferior a la original.'}</div>
+  <div class="improve-grid">
+   ${withReinforcement?`<label>Trabajo de refuerzo<input id="improveReinforcement" type="number" inputmode="decimal" min="0" max="10" step="0.01" value="${imp?.nota_trabajo_refuerzo==null?'':esc(imp.nota_trabajo_refuerzo)}" placeholder="0,00 a 10,00"></label>`:''}
+   <label>Evaluación de mejora<input id="improveEvaluation" type="number" inputmode="decimal" min="0" max="10" step="0.01" value="${imp?.nota_evaluacion_mejora==null?'':esc(imp.nota_evaluacion_mejora)}" placeholder="0,00 a 10,00"></label>
+  </div>
+  <div id="improvePreview" class="improve-preview">Nota definitiva: ${fmtGrade(finalNow)}</div>
+  <div class="row"><button id="improveSave" class="primary grow">${imp?'Actualizar mejora':'Guardar mejora'}</button>${imp?'<button id="improveDelete" class="danger">Eliminar mejora</button>':''}</div>
+ </div>`;
+ $('#improveBack').onclick=()=>openGradeItem(item);
+ let preview=()=>{
+  let e=Number($('#improveEvaluation').value),r=withReinforcement?Number($('#improveReinforcement').value):null;
+  if(!Number.isFinite(e)||(withReinforcement&&!Number.isFinite(r))){$('#improvePreview').textContent='Nota definitiva: —';return}
+  let tmp={nota_evaluacion_mejora:e,nota_trabajo_refuerzo:r};
+  $('#improvePreview').textContent='Nota definitiva: '+fmtGrade(effectiveGradeLocal(original,tmp));
+ };
+ $('#improveEvaluation').oninput=preview;if(withReinforcement)$('#improveReinforcement').oninput=preview;
+ $('#improveSave').onclick=()=>saveGradeImprovement(item,st,g,imp,withReinforcement);
+ if(imp)$('#improveDelete').onclick=()=>deleteGradeImprovement(item,imp);
+}
+async function saveGradeImprovement(item,st,g,imp,withReinforcement){
+ let evalRaw=$('#improveEvaluation').value.trim(),refRaw=withReinforcement?$('#improveReinforcement').value.trim():'';
+ let evalN=Number(evalRaw),refN=withReinforcement?Number(refRaw):null;
+ if(evalRaw===''||!Number.isFinite(evalN)||evalN<0||evalN>10){toast('Ingresa una evaluación de mejora entre 0 y 10.',true);return}
+ if(withReinforcement&&(refRaw===''||!Number.isFinite(refN)||refN<0||refN>10)){toast('Ingresa la nota del trabajo de refuerzo entre 0 y 10.',true);return}
+ let payload={
+  student_grade_id:g.id,
+  modalidad:withReinforcement?'CON_REFUERZO':'DIRECTA',
+  nota_trabajo_refuerzo:withReinforcement?refN:null,
+  nota_evaluacion_mejora:evalN
+ };
+ let btn=$('#improveSave');btn.disabled=true;btn.textContent='Guardando…';
+ let res;
+ if(imp)res=await sb.from('grade_improvements').update(payload).eq('id',imp.id);
+ else res=await sb.from('grade_improvements').insert(payload);
+ btn.disabled=false;btn.textContent=imp?'Actualizar mejora':'Guardar mejora';
+ if(res.error){toast('No se pudo guardar la mejora: '+res.error.message,true);return}
+ toast('✓ Mejora guardada. Se conservará siempre la nota más alta.');await openGradeItem(item);
+}
+async function deleteGradeImprovement(item,imp){
+ if(!confirm('¿Eliminar esta mejora de calificación? La nota original se conservará.'))return;
+ let {error}=await sb.from('grade_improvements').delete().eq('id',imp.id);
+ if(error){toast('No se pudo eliminar la mejora: '+error.message,true);return}
+ toast('✓ Mejora eliminada. Se conserva la nota original.');await openGradeItem(item);
 }
 
 async function showNotices(){
