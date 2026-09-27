@@ -169,7 +169,7 @@
 <section id="calificaciones" class="hide"><div id="gradesBody"></div></section>
 <section id="admin" class="hide"><div class="card"><h2>Panel administrador</h2><div class="admin-grid"><button data-admin="students">👨‍🎓 Estudiantes</button><button data-admin="teachers">👨‍🏫 Docentes</button><button data-admin="schedules">🗓 Horarios</button><button data-admin="reports">📊 Reportes</button><button data-admin="followup">📈 Seguimiento directivo</button><button data-admin="missing">📋 Clases sin registro</button><button data-admin="calendar">📅 Calendario institucional</button><button data-admin="attendance">📝 Registrar asistencia</button><button data-admin="gradesconsolidated">📊 Consolidado de calificaciones</button></div></div><div id="adminBody"></div></section>
 </main></div><div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script>
+<script src="./config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script><script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script><script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];let sb=null,profile=null,teacher=null,currentSchedule=null,currentStudents=[],currentSession=null;
 const cfg=window.UEBRA_CONFIG||{};const configured=cfg.SUPABASE_URL&&!cfg.SUPABASE_URL.includes('PEGA_AQUI')&&cfg.SUPABASE_ANON_KEY&&!cfg.SUPABASE_ANON_KEY.includes('PEGA_AQUI');if(!configured)$('#cfgwarn').classList.remove('hide');else sb=supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
 $('#signin').onclick=async()=>{if(!sb)return;$('#loginmsg').textContent='Ingresando…';let {data,error}=await sb.auth.signInWithPassword({email:$('#email').value.trim(),password:$('#password').value});if(error){$('#loginmsg').textContent=error.message;return}await boot(data.user)};
@@ -1777,36 +1777,68 @@ function renderGradeConsolidated(){
  </tbody></table></div></div>`;
  $('#downloadGradeExcel').onclick=downloadGradeConsolidatedExcel;
 }
-function downloadGradeConsolidatedExcel(){
- if(typeof XLSX==='undefined'){toast('No se pudo cargar el componente de Excel. Verifica la conexión a Internet y vuelve a intentar.',true);return}
+async function downloadGradeConsolidatedExcel(){
+ if(typeof ExcelJS==='undefined'){toast('No se pudo cargar el componente de Excel. Verifica la conexión a Internet y vuelve a intentar.',true);return}
  if(!consolidatedRows.length||!consolidatedCourse){toast('Primero carga un consolidado.',true);return}
- const p=pivotConsolidated(consolidatedRows),aoa=[];
- aoa.push(['UNIDAD EDUCATIVA BENJAMÍN RAMÍREZ ARTEAGA']);
- aoa.push([`CONSOLIDADO DE CALIFICACIONES · ${consolidatedCourse.nombre} · ${consolidatedCourse.jornada} · AÑO LECTIVO 2026–2027`]);aoa.push([]);
- let h1=['N.º','Cédula','Estudiante','Estado'],h2=['','','',''];
- p.subjects.forEach(s=>{h1.push(s.label,'','','');h2.push('T1','T2','T3','PAL')});
- if(p.hasAnimation){h1.push('Animación a la Lectura','','');h2.push('T1','T2','T3')}
- if(p.hasOvp){h1.push('OVP','','');h2.push('T1','T2','T3')}
- if(p.hasBehavior){h1.push('Comportamiento','','');h2.push('T1','T2','T3')}
- h1.push('Promedio General Anual','Situación Académica');h2.push('','');aoa.push(h1);aoa.push(h2);
- p.students.forEach((st,i)=>{
-  let row=[i+1,st.cedula,st.nombre,st.estado];
-  p.subjects.forEach(s=>{let g=st.grades[s.key]||{};row.push(g.t1==null?null:Number(g.t1),g.t2==null?null:Number(g.t2),g.t3==null?null:Number(g.t3),g.pal==null?null:Number(g.pal))});
-  if(p.hasAnimation)row.push(st.animation.t1==null?null:Number(st.animation.t1),st.animation.t2==null?null:Number(st.animation.t2),st.animation.t3==null?null:Number(st.animation.t3));
-  if(p.hasOvp)row.push(st.ovp.t1||null,st.ovp.t2||null,st.ovp.t3||null);
-  if(p.hasBehavior)row.push(st.behavior.t1||null,st.behavior.t2||null,st.behavior.t3||null);
-  row.push(st.promedio==null?null:Number(st.promedio),st.situacion);aoa.push(row);
- });
- const ws=XLSX.utils.aoa_to_sheet(aoa),lastCol=h1.length-1;
- ws['!merges']=[{s:{r:0,c:0},e:{r:0,c:lastCol}},{s:{r:1,c:0},e:{r:1,c:lastCol}}];
- let c=4;p.subjects.forEach(()=>{ws['!merges'].push({s:{r:3,c},e:{r:3,c:c+3}});c+=4});
- if(p.hasAnimation){ws['!merges'].push({s:{r:3,c},e:{r:3,c:c+2}});c+=3}
- if(p.hasOvp){ws['!merges'].push({s:{r:3,c},e:{r:3,c:c+2}});c+=3}
- if(p.hasBehavior){ws['!merges'].push({s:{r:3,c},e:{r:3,c:c+2}});c+=3}
- for(let r=5;r<5+p.students.length;r++){let ced=XLSX.utils.encode_cell({r,c:1});if(ws[ced]){ws[ced].t='s';ws[ced].v=String(p.students[r-5].cedula||'')}}
- ws['!cols']=[{wch:6},{wch:14},{wch:38},{wch:12},...p.subjects.flatMap(()=>[{wch:8},{wch:8},{wch:8},{wch:8}]),...(p.hasAnimation?[{wch:8},{wch:8},{wch:8}]:[]),...(p.hasOvp?[{wch:8},{wch:8},{wch:8}]:[]),...(p.hasBehavior?[{wch:36},{wch:36},{wch:36}]:[]),{wch:18},{wch:34}];
- const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,excelSafeName(`${consolidatedCourse.nombre} ${consolidatedCourse.jornada}`));
- XLSX.writeFile(wb,`Consolidado_${consolidatedCourse.nombre}_${consolidatedCourse.jornada}_2026-2027.xlsx`.replace(/\s+/g,'_'));toast('✓ Consolidado Excel descargado');
+ const btn=$('#downloadGradeExcel');if(btn){btn.disabled=true;btn.textContent='Preparando Excel…'}
+ try{
+  const p=pivotConsolidated(consolidatedRows);
+  const wb=new ExcelJS.Workbook();wb.creator='Unidad Educativa Benjamín Ramírez Arteaga';wb.company='UEBRA';wb.subject='Consolidado de Calificaciones';wb.created=new Date();
+  const ws=wb.addWorksheet(excelSafeName(`${consolidatedCourse.nombre} ${consolidatedCourse.jornada}`),{views:[{state:'frozen',xSplit:3,ySplit:7,topLeftCell:'D8',activeCell:'A8'}]});
+  const academicStart=4, subjectCount=p.subjects.length, academicEnd=academicStart+subjectCount*4-1;
+  let col=academicEnd+1;
+  const specialRanges=[];
+  if(p.hasAnimation){specialRanges.push({name:'Animación a la Lectura',start:col,end:col+2,type:'animation'});col+=3}
+  if(p.hasOvp){specialRanges.push({name:'OVP',start:col,end:col+2,type:'ovp'});col+=3}
+  if(p.hasBehavior){specialRanges.push({name:'Comportamiento',start:col,end:col+2,type:'behavior'});col+=3}
+  const avgCol=col++,statusCol=col++,lastCol=statusCol;
+  const L=n=>{let s='';for(n++;n;n=Math.floor((n-1)/26))s=String.fromCharCode(65+(n-1)%26)+s;return s};
+  const lastLetter=L(lastCol);
+  // Encabezado institucional
+  ws.mergeCells(1,1,1,lastCol+1);ws.getCell('A1').value='UNIDAD EDUCATIVA BENJAMÍN RAMÍREZ ARTEAGA';
+  ws.mergeCells(2,1,2,lastCol+1);ws.getCell('A2').value='CONSOLIDADO DE CALIFICACIONES';
+  ws.mergeCells(3,1,3,lastCol+1);ws.getCell('A3').value=`${consolidatedCourse.nombre} · ${consolidatedCourse.jornada}`;
+  ws.mergeCells(4,1,4,lastCol+1);ws.getCell('A4').value='AÑO LECTIVO 2026–2027';
+  ws.mergeCells(5,1,5,lastCol+1);ws.getCell('A5').value=`Generado: ${new Intl.DateTimeFormat('es-EC',{dateStyle:'long',timeStyle:'short',timeZone:'America/Guayaquil'}).format(new Date())}`;
+  ['A1','A2','A3','A4'].forEach((a,i)=>{let c=ws.getCell(a);c.font={name:'Arial',bold:true,size:[16,14,12,11][i],color:{argb:'FF173F6B'}};c.alignment={horizontal:'center',vertical:'middle'}});ws.getCell('A5').font={name:'Arial',italic:true,size:9,color:{argb:'FF667085'}};ws.getCell('A5').alignment={horizontal:'center'};
+  ws.getRow(1).height=25;ws.getRow(2).height=22;ws.getRow(3).height=20;ws.getRow(4).height=18;ws.getRow(5).height=18;
+  // Encabezados de tabla: filas 6 y 7
+  const h1=ws.getRow(6),h2=ws.getRow(7);['N.º','Cédula','Estudiante','Estado'].forEach((v,i)=>{h1.getCell(i+1).value=v;ws.mergeCells(6,i+1,7,i+1)});
+  let c=5;
+  p.subjects.forEach(s=>{ws.getCell(6,c).value=s.label;ws.mergeCells(6,c,6,c+3);['T1','T2','T3','PAL'].forEach((v,j)=>ws.getCell(7,c+j).value=v);c+=4});
+  specialRanges.forEach(r=>{ws.getCell(6,r.start+1).value=r.name;ws.mergeCells(6,r.start+1,6,r.end+1);['T1','T2','T3'].forEach((v,j)=>ws.getCell(7,r.start+1+j).value=v)});
+  ws.getCell(6,avgCol+1).value='Promedio General';ws.mergeCells(6,avgCol+1,7,avgCol+1);ws.getCell(6,statusCol+1).value='Situación Académica';ws.mergeCells(6,statusCol+1,7,statusCol+1);
+  const academicFill='FFDCEAF7',specialFill='FFEDE7F6',identityFill='FFE8EEF5',finalFill='FFE7F4EA',border={top:{style:'thin',color:{argb:'FFB9C5D2'}},left:{style:'thin',color:{argb:'FFB9C5D2'}},bottom:{style:'thin',color:{argb:'FFB9C5D2'}},right:{style:'thin',color:{argb:'FFB9C5D2'}}};
+  for(let cc=1;cc<=lastCol+1;cc++){let fill=cc<=4?identityFill:(cc-1<=academicEnd?academicFill:(cc-1<avgCol?specialFill:finalFill));for(let rr=6;rr<=7;rr++){let cell=ws.getCell(rr,cc);cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:fill}};cell.font={name:'Arial',bold:true,size:9,color:{argb:'FF173F6B'}};cell.alignment={horizontal:'center',vertical:'middle',wrapText:true};cell.border=border}}
+  ws.getRow(6).height=32;ws.getRow(7).height=23;
+  // Datos
+  p.students.forEach((st,i)=>{
+   const row=ws.getRow(8+i);let vals=[i+1,String(st.cedula||''),st.nombre,st.estado||''];
+   p.subjects.forEach(s=>{let g=st.grades[s.key]||{};vals.push(g.t1==null?'—':Number(g.t1),g.t2==null?'—':Number(g.t2),g.t3==null?'—':Number(g.t3),g.pal==null?'—':Number(g.pal))});
+   if(p.hasAnimation)vals.push(st.animation.t1==null?'—':Number(st.animation.t1),st.animation.t2==null?'—':Number(st.animation.t2),st.animation.t3==null?'—':Number(st.animation.t3));
+   if(p.hasOvp)vals.push(st.ovp.t1||'—',st.ovp.t2||'—',st.ovp.t3||'—');
+   if(p.hasBehavior)vals.push(st.behavior.t1||'—',st.behavior.t2||'—',st.behavior.t3||'—');
+   vals.push(st.promedio==null?'—':Number(st.promedio),st.situacion||'PENDIENTE');row.values=vals;
+   row.height=26;
+   for(let cc=1;cc<=lastCol+1;cc++){let cell=row.getCell(cc);cell.font={name:'Arial',size:9};cell.border=border;cell.alignment={vertical:'middle',horizontal:(cc===3||cc===4||cc===statusCol+1)?'left':'center',wrapText:cc===3||cc===statusCol+1||specialRanges.some(r=>r.type==='behavior'&&cc>=r.start+1&&cc<=r.end+1)};if(i%2===1)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8FAFC'}}}
+   // Formato numérico y alerta bajo 7 SOLO en calificaciones numéricas académicas y Animación
+   const numericCols=[];for(let x=academicStart;x<=academicEnd;x++)numericCols.push(x);specialRanges.filter(r=>r.type==='animation').forEach(r=>{for(let x=r.start;x<=r.end;x++)numericCols.push(x)});numericCols.push(avgCol);
+   numericCols.forEach(idx=>{let cell=row.getCell(idx+1);if(typeof cell.value==='number'){cell.numFmt='0.00';if(cell.value<7){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFFFE2E2'}};cell.font={name:'Arial',size:9,bold:true,color:{argb:'FFB42318'}}}else if(cell.value>=9){cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFEAF6ED'}}}}});
+  });
+  // Anchos
+  ws.getColumn(1).width=6;ws.getColumn(2).width=15;ws.getColumn(3).width=38;ws.getColumn(4).width=13;
+  for(let x=academicStart;x<=academicEnd;x++)ws.getColumn(x+1).width=9;
+  specialRanges.forEach(r=>{for(let x=r.start;x<=r.end;x++)ws.getColumn(x+1).width=r.type==='behavior'?32:10});ws.getColumn(avgCol+1).width=15;ws.getColumn(statusCol+1).width=31;
+  ws.autoFilter={from:{row:7,column:1},to:{row:7,column:lastCol+1}};
+  ws.pageSetup={orientation:'landscape',fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9,margins:{left:0.25,right:0.25,top:0.5,bottom:0.5,header:0.2,footer:0.2},printTitlesRow:'1:7'};
+  ws.headerFooter.oddFooter='&LUEBRA&CConsolidado de Calificaciones&R Página &P de &N';
+  ws.properties.defaultRowHeight=18;
+  // Leyenda
+  const legendRow=8+p.students.length+2;ws.mergeCells(legendRow,1,legendRow,lastCol+1);let lc=ws.getCell(legendRow,1);lc.value='Referencia visual: celdas en rojo suave = calificación numérica inferior a 7,00. Animación, OVP y Comportamiento son evaluaciones complementarias y no modifican el promedio académico.';lc.font={name:'Arial',italic:true,size:9,color:{argb:'FF667085'}};lc.alignment={wrapText:true,vertical:'middle'};lc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F6F8'}};lc.border=border;ws.getRow(legendRow).height=30;
+  // Logo institucional desde el mismo sitio (si está disponible). Si falla, el Excel se genera normalmente.
+  try{let resp=await fetch('./logo-uebra.png',{cache:'force-cache'});if(resp.ok){let blob=await resp.blob(),buf=await blob.arrayBuffer();let imgId=wb.addImage({buffer:buf,extension:(blob.type||'').includes('jpeg')?'jpeg':'png'});ws.addImage(imgId,{tl:{col:0.15,row:0.15},ext:{width:70,height:70},editAs:'oneCell'})}}catch(e){}
+  const buffer=await wb.xlsx.writeBuffer();const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Consolidado_${consolidatedCourse.nombre}_${consolidatedCourse.jornada}_2026-2027.xlsx`.replace(/\s+/g,'_');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('✓ Consolidado institucional descargado');
+ }catch(e){console.error(e);toast('No se pudo generar el Excel: '+(e?.message||e),true)}finally{if(btn){btn.disabled=false;btn.textContent='📥 Descargar Excel'}}
 }
 
 let toastTimer=null;function toast(msg,isError=false){let t=$('#toast');if(!t)return;t.textContent=msg;t.classList.toggle('error',!!isError);t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),3200)}
