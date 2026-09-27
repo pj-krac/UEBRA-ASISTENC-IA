@@ -1676,10 +1676,23 @@ async function showTutorGradeConsolidated(c){
  let box=$('#gradesBody');box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>📊 Consolidado de Calificaciones</h2><div class="muted">${esc(c.grado)} · ${esc(c.jornada)}</div></div><button id="tutorConsolidatedBack">← Calificaciones</button></div></div><div id="consolidatedResult"><div class="card">Preparando consolidado…</div></div>`;$('#tutorConsolidatedBack').onclick=showGrades;consolidatedCourse={id:c.course_id,nombre:c.grado,jornada:c.jornada};let {data,error}=await sb.rpc('tutor_grade_consolidated',{p_course_id:c.course_id});if(error){$('#consolidatedResult').innerHTML='<div class="notice">No se pudo cargar el consolidado: '+esc(error.message)+'</div>';return}consolidatedRows=data||[];await loadTutorSpecialResults(c.course_id,c.grado);renderGradeConsolidated();
 }
 async function loadTutorSpecialResults(cid,courseName){
- consolidatedSpecial={animation:[],ovp:[],socio:[]};let ids=[...new Set((consolidatedRows||[]).map(x=>x.student_id))],norm=String(courseName||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase(),useOvp=/OCTAVO|NOVENO|DECIMO/.test(norm);for(let sid of ids){for(let tr=1;tr<=3;tr++){let ar=await sb.rpc('reading_animation_trimester_result',{p_student_id:sid,p_course_id:cid,p_trimestre:tr});if(!ar.error&&ar.data!=null)consolidatedSpecial.animation.push({student_id:sid,trimestre:tr,nota:ar.data});if(useOvp){let or=await sb.rpc('ovp_trimester_result',{p_student_id:sid,p_course_id:cid,p_trimestre:tr});if(!or.error&&or.data)consolidatedSpecial.ovp.push({student_id:sid,trimestre:tr,resultado:or.data})}let br=await sb.rpc('student_behavior_description',{p_student_id:sid,p_course_id:cid,p_trimestre:tr});if(!br.error&&br.data)consolidatedSpecial.socio.push({student_id:sid,trimestre:tr,descripcion:br.data})}}
+ // V3.3: una sola llamada a Supabase para todo el curso y los 3 trimestres.
+ consolidatedSpecial={animation:[],ovp:[],socio:[],applies:{animation:false,ovp:false,behavior:false}};
+ let {data,error}=await sb.rpc('tutor_special_consolidated',{p_course_id:cid});
+ if(error){toast('No se pudieron cargar las evaluaciones especiales: '+error.message,true);return false}
+ let rows=data||[];
+ for(let x of rows){
+  consolidatedSpecial.applies.animation=consolidatedSpecial.applies.animation||!!x.aplica_animacion;
+  consolidatedSpecial.applies.ovp=consolidatedSpecial.applies.ovp||!!x.aplica_ovp;
+  consolidatedSpecial.applies.behavior=consolidatedSpecial.applies.behavior||!!x.aplica_comportamiento;
+  if(x.animacion!=null)consolidatedSpecial.animation.push({student_id:x.student_id,trimestre:x.trimestre,nota:x.animacion});
+  if(x.ovp)consolidatedSpecial.ovp.push({student_id:x.student_id,trimestre:x.trimestre,resultado:x.ovp});
+  if(x.comportamiento)consolidatedSpecial.socio.push({student_id:x.student_id,trimestre:x.trimestre,descripcion:x.comportamiento});
+ }
+ return true;
 }
 
-let consolidatedRows=[],consolidatedCourse=null,consolidatedSpecial={animation:[],ovp:[],socio:[]};
+let consolidatedRows=[],consolidatedCourse=null,consolidatedSpecial={animation:[],ovp:[],socio:[],applies:{animation:false,ovp:false,behavior:false}};
 
 function courseAcademicOrder(name){
  const n=String(name||'').toUpperCase();
@@ -1723,13 +1736,8 @@ async function loadGradeConsolidated(){
  let {data,error}=await sb.rpc('admin_grade_consolidated',{p_course_id:cid});
  if(error){result.innerHTML='<div class="notice">No se pudo cargar el consolidado: '+esc(error.message)+'</div>';return}
  consolidatedRows=data||[];
- let [animRes,ovpRes,socioRes]=await Promise.all([
-  sb.from('reading_animation_grades').select('student_id,trimestre,nota').eq('course_id',cid),
-  sb.from('ovp_evaluations').select('student_id,trimestre,indicador_codigo,valor').eq('course_id',cid),
-  sb.from('socioemotional_evaluations').select('student_id,trimestre,habilidad_codigo,valor').eq('course_id',cid)
- ]);
- if(animRes.error||ovpRes.error||socioRes.error){result.innerHTML='<div class="notice">No se pudieron cargar las evaluaciones especiales: '+esc((animRes.error||ovpRes.error||socioRes.error).message)+'</div>';return}
- consolidatedSpecial={animation:animRes.data||[],ovp:ovpRes.data||[],socio:socioRes.data||[]};
+ let specialOk=await loadTutorSpecialResults(cid,label);
+ if(!specialOk){result.innerHTML='<div class="notice">No se pudieron cargar las evaluaciones especiales del curso.</div>';return}
  let [nombre,jornada]=label.split(' · ');
  consolidatedCourse={id:cid,nombre:nombre||label,jornada:jornada||''};
  renderGradeConsolidated();
@@ -1753,9 +1761,9 @@ function pivotConsolidated(rows){
   st.behavior['t'+tr]=behaviorLocal(wanted);
  }
  let name=(consolidatedCourse?.nombre||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
- const hasAnimation=(consolidatedSpecial.animation||[]).length>0;
- const hasOvp=(consolidatedSpecial.ovp||[]).length>0 || /OCTAVO|NOVENO|DECIMO/.test(name);
- const hasBehavior=(consolidatedSpecial.socio||[]).length>0;
+ const hasAnimation=!!consolidatedSpecial.applies?.animation;
+ const hasOvp=!!consolidatedSpecial.applies?.ovp;
+ const hasBehavior=!!consolidatedSpecial.applies?.behavior;
  return {subjects,students:[...students.values()],hasAnimation,hasOvp,hasBehavior};
 }
 function renderGradeConsolidated(){
