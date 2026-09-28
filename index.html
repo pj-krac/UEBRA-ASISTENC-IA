@@ -1725,11 +1725,29 @@ async function saveAdminAttendance(){
 }
 
 
+// ===== V4.6 · OPTIMIZACIÓN DE DESCARGAS EXCEL =====
+let uebraLogoExcelCache=null;
+async function getUebraLogoExcel(){
+ if(uebraLogoExcelCache)return uebraLogoExcelCache;
+ try{
+  const resp=await fetch('./logo-uebra.png',{cache:'force-cache'});if(!resp.ok)return null;
+  const blob=await resp.blob();
+  uebraLogoExcelCache={buffer:await blob.arrayBuffer(),extension:(blob.type||'').includes('jpeg')?'jpeg':'png'};
+  return uebraLogoExcelCache;
+ }catch(e){return null}
+}
+async function mapWithConcurrency(items,limit,worker){
+ const out=new Array(items.length);let next=0;
+ async function runner(){while(true){const i=next++;if(i>=items.length)return;out[i]=await worker(items[i],i)}}
+ await Promise.all(Array.from({length:Math.min(limit,items.length)},runner));return out;
+}
+
 // ===== V2.8 · CONSOLIDADO ACADÉMICO ADMINISTRATIVO =====
 async function downloadMySubjectGrades(a){
  if(typeof ExcelJS==='undefined'){toast('No se pudo cargar el componente de Excel. Verifica la conexión a Internet y vuelve a intentar.',true);return}
  if(!a||!teacher)return;
  toast('Preparando archivo de calificaciones…');
+ getUebraLogoExcel();
  let {data:students,error:se}=await sb.from('students').select('id,nombre,cedula').eq('course_id',a.course_id).eq('estado','ACTIVO').order('nombre');
  if(se){toast(se.message,true);return}
  students=students||[];
@@ -1740,16 +1758,16 @@ async function downloadMySubjectGrades(a){
  try{
   if(key==='ANIMACION_LECTURA'){
    headers=['N.º','Cédula','Estudiante','T1','T2','T3'];
-   for(let i=0;i<students.length;i++){let st=students[i],v=[];for(let tr=1;tr<=3;tr++){let r=await sb.rpc('reading_animation_trimester_result',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr});v.push(r.error?null:r.data)}rows.push([i+1,st.cedula||'',st.nombre,...v.map(x=>x==null?null:Number(x))])}
+   rows=await mapWithConcurrency(students,8,async(st,i)=>{const rr=await Promise.all([1,2,3].map(tr=>sb.rpc('reading_animation_trimester_result',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr})));return [i+1,st.cedula||'',st.nombre,...rr.map(r=>r.error||r.data==null?null:Number(r.data))]});
   }else if(key==='OVP'){
    headers=['N.º','Cédula','Estudiante','T1','T2','T3'];
-   for(let i=0;i<students.length;i++){let st=students[i],v=[];for(let tr=1;tr<=3;tr++){let r=await sb.rpc('ovp_trimester_result',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr});v.push(r.error?null:r.data)}rows.push([i+1,st.cedula||'',st.nombre,...v])}
+   rows=await mapWithConcurrency(students,8,async(st,i)=>{const rr=await Promise.all([1,2,3].map(tr=>sb.rpc('ovp_trimester_result',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr})));return [i+1,st.cedula||'',st.nombre,...rr.map(r=>r.error?null:r.data)]});
   }else if(key==='TUTORIA'){
    headers=['N.º','Cédula','Estudiante','T1 · Acompañamiento','T1 · Comportamiento','T2 · Acompañamiento','T2 · Comportamiento','T3 · Acompañamiento','T3 · Comportamiento'];
-   for(let i=0;i<students.length;i++){let st=students[i],v=[];for(let tr=1;tr<=3;tr++){let q=await sb.rpc('socioemotional_qualitative',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr});let br=await sb.rpc('student_behavior_description',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr});v.push(q.error?null:q.data,br.error?null:br.data)}rows.push([i+1,st.cedula||'',st.nombre,...v])}
+   rows=await mapWithConcurrency(students,6,async(st,i)=>{const rr=await Promise.all([1,2,3].map(async tr=>{const [q,br]=await Promise.all([sb.rpc('socioemotional_qualitative',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr}),sb.rpc('student_behavior_description',{p_student_id:st.id,p_course_id:a.course_id,p_trimestre:tr})]);return [q.error?null:q.data,br.error?null:br.data]}));return [i+1,st.cedula||'',st.nombre,...rr.flat()]});
   }else{
    headers=['N.º','Cédula','Estudiante','T1','T2','T3','PAL'];
-   for(let i=0;i<students.length;i++){let st=students[i],v=[];for(let tr=1;tr<=3;tr++){let r=await sb.rpc('subject_trimester_grade',{p_student_id:st.id,p_course_id:a.course_id,p_asignatura:a.asignatura,p_trimestre:tr});v.push(r.error?null:r.data)}let ar=await sb.rpc('annual_subject_grade',{p_student_id:st.id,p_course_id:a.course_id,p_asignatura:a.asignatura});rows.push([i+1,st.cedula||'',st.nombre,...v.map(x=>x==null?null:Number(x)),ar.error||ar.data==null?null:Number(ar.data)])}
+   rows=await mapWithConcurrency(students,8,async(st,i)=>{const rr=await Promise.all([1,2,3].map(tr=>sb.rpc('subject_trimester_grade',{p_student_id:st.id,p_course_id:a.course_id,p_asignatura:a.asignatura,p_trimestre:tr})));const ar=await sb.rpc('annual_subject_grade',{p_student_id:st.id,p_course_id:a.course_id,p_asignatura:a.asignatura});return [i+1,st.cedula||'',st.nombre,...rr.map(r=>r.error||r.data==null?null:Number(r.data)),ar.error||ar.data==null?null:Number(ar.data)]});
   }
 
   const wb=new ExcelJS.Workbook();
@@ -1792,7 +1810,7 @@ async function downloadMySubjectGrades(a){
   lc.value=['OVP','TUTORIA'].includes(key)?'Pendiente = información aún no registrada.':'Referencia visual: rojo suave = calificación inferior a 7,00 · verde suave = calificación igual o superior a 9,00 · Pendiente = información aún no registrada.';
   lc.font={name:'Arial',italic:true,size:9,color:{argb:'FF667085'}};lc.alignment={wrapText:true,vertical:'middle'};lc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F6F8'}};lc.border=border;ws.getRow(legendRow).height=30;
 
-  try{let resp=await fetch('./logo-uebra.png',{cache:'force-cache'});if(resp.ok){let blob=await resp.blob(),buf=await blob.arrayBuffer();let imgId=wb.addImage({buffer:buf,extension:(blob.type||'').includes('jpeg')?'jpeg':'png'});ws.addImage(imgId,{tl:{col:0.15,row:0.05},ext:{width:90,height:60},editAs:'oneCell'})}}catch(e){}
+  try{let logo=await getUebraLogoExcel();if(logo){let imgId=wb.addImage(logo);ws.addImage(imgId,{tl:{col:0.15,row:0.05},ext:{width:90,height:60},editAs:'oneCell'})}}catch(e){}
 
   const buffer=await wb.xlsx.writeBuffer();const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`UEBRA_${excelSafeName(a.grado)}_${excelSafeName(subjectLabel)}_2026-2027.xlsx`.replace(/\s+/g,'_');document.body.appendChild(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('✓ Archivo institucional de calificaciones generado');
  }catch(e){console.error(e);toast('No se pudo generar el Excel: '+(e?.message||e),true)}
@@ -1951,6 +1969,7 @@ async function downloadGradeConsolidatedExcel(){
  if(typeof ExcelJS==='undefined'){toast('No se pudo cargar el componente de Excel. Verifica la conexión a Internet y vuelve a intentar.',true);return}
  if(!consolidatedRows.length||!consolidatedCourse){toast('Primero carga un consolidado.',true);return}
  const btn=$('#downloadGradeExcel');if(btn){btn.disabled=true;btn.textContent='Preparando Excel…'}
+ await new Promise(requestAnimationFrame);
  try{
   const p=pivotConsolidated(consolidatedRows);
   const wb=new ExcelJS.Workbook();wb.creator='Unidad Educativa Benjamín Ramírez Arteaga';wb.company='UEBRA';wb.subject='Consolidado de Calificaciones';wb.created=new Date();
