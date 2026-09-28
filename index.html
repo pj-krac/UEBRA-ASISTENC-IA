@@ -1798,7 +1798,7 @@ async function downloadMySubjectGrades(a){
  }catch(e){console.error(e);toast('No se pudo generar el Excel: '+(e?.message||e),true)}
 }
 async function showTutorGradeConsolidated(c){
- let box=$('#gradesBody');box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>📊 Consolidado de Calificaciones</h2><div class="muted">${esc(c.grado)} · ${esc(c.jornada)}</div></div><button id="tutorConsolidatedBack">← Calificaciones</button></div></div><div id="consolidatedResult"><div class="card">Preparando consolidado…</div></div>`;$('#tutorConsolidatedBack').onclick=showGrades;consolidatedCourse={id:c.course_id,nombre:c.grado,jornada:c.jornada};let {data,error}=await sb.rpc('tutor_grade_consolidated',{p_course_id:c.course_id});if(error){$('#consolidatedResult').innerHTML='<div class="notice">No se pudo cargar el consolidado: '+esc(error.message)+'</div>';return}consolidatedRows=data||[];await loadTutorSpecialResults(c.course_id,c.grado);renderGradeConsolidated();
+ let box=$('#gradesBody');box.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h2>📊 Consolidado de Calificaciones</h2><div class="muted">${esc(c.grado)} · ${esc(c.jornada)}</div></div><button id="tutorConsolidatedBack">← Calificaciones</button></div></div><div id="consolidatedResult"><div class="card">Preparando consolidado…</div></div>`;$('#tutorConsolidatedBack').onclick=showGrades;consolidatedCourse={id:c.course_id,nombre:c.grado,jornada:c.jornada};let {data,error}=await sb.rpc('tutor_grade_consolidated',{p_course_id:c.course_id});if(error){$('#consolidatedResult').innerHTML='<div class="notice">No se pudo cargar el consolidado: '+esc(error.message)+'</div>';return}consolidatedRows=data||[];await enrichConsolidatedWithFinalGrades();await loadTutorSpecialResults(c.course_id,c.grado);renderGradeConsolidated();
 }
 async function loadTutorSpecialResults(cid,courseName){
  // V3.3: una sola llamada a Supabase para todo el curso y los 3 trimestres.
@@ -1861,18 +1861,62 @@ async function loadGradeConsolidated(){
  let {data,error}=await sb.rpc('admin_grade_consolidated',{p_course_id:cid});
  if(error){result.innerHTML='<div class="notice">No se pudo cargar el consolidado: '+esc(error.message)+'</div>';return}
  consolidatedRows=data||[];
+ await enrichConsolidatedWithFinalGrades();
  let specialOk=await loadTutorSpecialResults(cid,label);
  if(!specialOk){result.innerHTML='<div class="notice">No se pudieron cargar las evaluaciones especiales del curso.</div>';return}
  let [nombre,jornada]=label.split(' · ');
  consolidatedCourse={id:cid,nombre:nombre||label,jornada:jornada||''};
  renderGradeConsolidated();
 }
+async function enrichConsolidatedWithFinalGrades(){
+ const studentIds=[...new Set((consolidatedRows||[]).map(r=>r.student_id).filter(Boolean))];
+ if(!studentIds.length)return;
+ const payloads=await Promise.all(studentIds.map(async sid=>{
+  try{const {data,error}=await sb.rpc('academic_report_data',{p_student_id:sid});return error?null:data}catch(e){return null}
+ }));
+ const byStudent=new Map();
+ payloads.forEach((p,i)=>{if(p)byStudent.set(studentIds[i],p)});
+ for(const r of consolidatedRows){
+  const p=byStudent.get(r.student_id);if(!p)continue;
+  const arr=Array.isArray(p.asignaturas)?p.asignaturas:[];
+  const key=String(r.asignatura_normalizada||'').trim().toUpperCase();
+  const a=arr.find(x=>String(x.asignatura_normalizada||x.normalized||x.asignatura||'').trim().toUpperCase()===key)
+       ||arr.find(x=>String(x.asignatura||'').trim().toUpperCase()===String(r.asignatura||'').trim().toUpperCase());
+  if(a){
+   r.supletorio=a.supletorio??null;
+   r.calificacion_anual_final=a.calificacion_anual_final??a.pal_final??a.pal_original??r.pal??null;
+   r.requiere_supletorio=!!a.requiere_supletorio;
+  }else{
+   r.supletorio=null;r.calificacion_anual_final=r.pal??null;r.requiere_supletorio=false;
+  }
+ }
+}
+function finalStatusFromSubjects(student,courseName){
+ const grades=Object.values(student.grades||{});if(!grades.length)return 'PENDIENTE';
+ if(grades.some(g=>g.final==null))return 'PENDIENTE';
+ const n=String(courseName||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+ const vals=grades.map(g=>Number(g.final));
+ if(/SEGUNDO EGB|TERCERO EGB|CUARTO EGB/.test(n))return 'PROMOVIDO/A';
+ if(/QUINTO EGB|SEXTO EGB|SEPTIMO EGB/.test(n)){
+  if(vals.some(v=>v<=4))return 'REQUIERE PROCESO DE PROMOCIÓN';
+  if(vals.some(v=>v<7))return 'SUPLETORIO';
+  return 'PROMOVIDO/A';
+ }
+ if(vals.some(v=>v<=4))return 'NO PROMOVIDO/A';
+ if(vals.some(v=>v<7))return 'SUPLETORIO';
+ return 'PROMOVIDO/A';
+}
+function finalAverageFromSubjects(student){
+ const grades=Object.values(student.grades||{});if(!grades.length||grades.some(g=>g.final==null))return null;
+ const avg=grades.reduce((a,g)=>a+Number(g.final),0)/grades.length;
+ return Math.trunc((avg+Number.EPSILON)*100)/100;
+}
 function pivotConsolidated(rows){
  const subjects=[],subjectSeen=new Set(),students=new Map();
  for(const r of rows){
   if(!subjectSeen.has(r.asignatura_normalizada)){subjectSeen.add(r.asignatura_normalizada);subjects.push({key:r.asignatura_normalizada,label:gradeSubjectLabel(r.asignatura)})}
   if(!students.has(r.student_id))students.set(r.student_id,{id:r.student_id,nombre:r.estudiante,cedula:r.cedula||'',estado:r.estado_estudiante||'',promedio:r.promedio_general_anual,situacion:r.situacion_academica||'PENDIENTE',grades:{},animation:{},ovp:{},behavior:{}});
-  let st=students.get(r.student_id);st.promedio=r.promedio_general_anual;st.situacion=r.situacion_academica||'PENDIENTE';st.grades[r.asignatura_normalizada]={t1:r.trimestre_1,t2:r.trimestre_2,t3:r.trimestre_3,pal:r.pal};
+  let st=students.get(r.student_id);st.promedio=r.promedio_general_anual;st.situacion=r.situacion_academica||'PENDIENTE';st.grades[r.asignatura_normalizada]={t1:r.trimestre_1,t2:r.trimestre_2,t3:r.trimestre_3,pal:r.pal,supp:r.supletorio??null,final:r.calificacion_anual_final??r.pal??null,requiresSupp:!!r.requiere_supletorio};
  }
  for(const a of (consolidatedSpecial.animation||[])){let st=students.get(a.student_id);if(st)st.animation['t'+a.trimestre]=a.nota}
  const og=new Map();
@@ -1889,16 +1933,17 @@ function pivotConsolidated(rows){
  const hasAnimation=!!consolidatedSpecial.applies?.animation;
  const hasOvp=!!consolidatedSpecial.applies?.ovp;
  const hasBehavior=!!consolidatedSpecial.applies?.behavior;
- return {subjects,students:[...students.values()],hasAnimation,hasOvp,hasBehavior};
+ const studentList=[...students.values()];studentList.forEach(st=>{st.promedioFinal=finalAverageFromSubjects(st);st.situacionFinal=finalStatusFromSubjects(st,consolidatedCourse?.nombre)});
+ return {subjects,students:studentList,hasAnimation,hasOvp,hasBehavior};
 }
 function renderGradeConsolidated(){
  const result=$('#consolidatedResult');
  if(!consolidatedRows.length){result.innerHTML='<div class="card"><p class="muted">No hay estudiantes/asignaturas para mostrar en este curso.</p></div>';return}
  const p=pivotConsolidated(consolidatedRows),nPending=p.students.filter(s=>String(s.situacion).toUpperCase()==='PENDIENTE').length;
  result.innerHTML=`<div class="card"><div class="grade-head"><div class="grow"><h3>${esc(consolidatedCourse.nombre)} · ${esc(consolidatedCourse.jornada)}</h3><div class="muted">${p.students.length} estudiantes · ${p.subjects.length} asignaturas cuantitativas</div></div><button id="downloadGradeExcel" class="primary">📥 Descargar consolidado</button></div>
- <div class="consolidated-summary"><span>Año lectivo 2026–2027</span><span>PAL y promedio anual: solo asignaturas cuantitativas correspondientes</span>${p.hasAnimation?'<span>Animación: T1–T3</span>':''}${p.hasOvp?'<span>OVP: T1–T3</span>':''}${p.hasBehavior?'<span>Comportamiento: T1–T3</span>':''}${nPending?`<span>${nPending} situación(es) pendiente(s)</span>`:''}</div>
- <div class="consolidated-table-wrap"><table class="consolidated-table"><thead><tr><th>N.º</th><th>Cédula</th><th>Estudiante</th>${p.subjects.map(s=>`<th colspan="4">${esc(s.label)}</th>`).join('')}${p.hasAnimation?'<th colspan="3">Animación a la Lectura</th>':''}${p.hasOvp?'<th colspan="3">OVP</th>':''}${p.hasBehavior?'<th colspan="3">Comportamiento</th>':''}<th>Promedio general</th><th>Situación académica</th></tr><tr><th></th><th></th><th></th>${p.subjects.map(()=>'<th>T1</th><th>T2</th><th>T3</th><th>PAL</th>').join('')}${p.hasAnimation?'<th>T1</th><th>T2</th><th>T3</th>':''}${p.hasOvp?'<th>T1</th><th>T2</th><th>T3</th>':''}${p.hasBehavior?'<th>T1</th><th>T2</th><th>T3</th>':''}<th>Anual</th><th></th></tr></thead><tbody>
- ${p.students.map((st,i)=>`<tr><td>${i+1}</td><td>${esc(st.cedula)}</td><td class="name">${esc(st.nombre)}</td>${p.subjects.map(s=>{let g=st.grades[s.key]||{};return [g.t1,g.t2,g.t3,g.pal].map(v=>`<td class="${v==null?'pending':''}">${v==null?'—':fmtGrade(v)}</td>`).join('')}).join('')}${p.hasAnimation?[st.animation.t1,st.animation.t2,st.animation.t3].map(v=>`<td class="${v==null?'pending':''}">${v==null?'—':fmtGrade(v)}</td>`).join(''):''}${p.hasOvp?[st.ovp.t1,st.ovp.t2,st.ovp.t3].map(v=>`<td class="${v==null?'pending':''}">${v==null?'—':esc(v)}</td>`).join(''):''}${p.hasBehavior?[st.behavior.t1,st.behavior.t2,st.behavior.t3].map(v=>`<td class="${v==null?'pending':''}" style="white-space:normal;min-width:210px">${v==null?'—':esc(v)}</td>`).join(''):''}<td class="${st.promedio==null?'pending':''}">${st.promedio==null?'—':fmtGrade(st.promedio)}</td><td>${esc(st.situacion)}</td></tr>`).join('')}
+ <div class="consolidated-summary"><span>Año lectivo 2026–2027</span><span>PAL · Supletorio · Calificación final · Promedio final</span>${p.hasAnimation?'<span>Animación: T1–T3</span>':''}${p.hasOvp?'<span>OVP: T1–T3</span>':''}${p.hasBehavior?'<span>Comportamiento: T1–T3</span>':''}${nPending?`<span>${nPending} situación(es) pendiente(s)</span>`:''}</div>
+ <div class="consolidated-table-wrap"><table class="consolidated-table"><thead><tr><th>N.º</th><th>Cédula</th><th>Estudiante</th>${p.subjects.map(s=>`<th colspan="6">${esc(s.label)}</th>`).join('')}${p.hasAnimation?'<th colspan="3">Animación a la Lectura</th>':''}${p.hasOvp?'<th colspan="3">OVP</th>':''}${p.hasBehavior?'<th colspan="3">Comportamiento</th>':''}<th>Promedio general</th><th>Situación académica</th></tr><tr><th></th><th></th><th></th>${p.subjects.map(()=>'<th>T1</th><th>T2</th><th>T3</th><th>PAL</th><th>Supletorio</th><th>Final</th>').join('')}${p.hasAnimation?'<th>T1</th><th>T2</th><th>T3</th>':''}${p.hasOvp?'<th>T1</th><th>T2</th><th>T3</th>':''}${p.hasBehavior?'<th>T1</th><th>T2</th><th>T3</th>':''}<th>Anual</th><th></th></tr></thead><tbody>
+ ${p.students.map((st,i)=>`<tr><td>${i+1}</td><td>${esc(st.cedula)}</td><td class="name">${esc(st.nombre)}</td>${p.subjects.map(s=>{let g=st.grades[s.key]||{};return [g.t1,g.t2,g.t3,g.pal,g.supp,g.final].map(v=>`<td class="${v==null?'pending':''}">${v==null?'—':fmtGrade(v)}</td>`).join('')}).join('')}${p.hasAnimation?[st.animation.t1,st.animation.t2,st.animation.t3].map(v=>`<td class="${v==null?'pending':''}">${v==null?'—':fmtGrade(v)}</td>`).join(''):''}${p.hasOvp?[st.ovp.t1,st.ovp.t2,st.ovp.t3].map(v=>`<td class="${v==null?'pending':''}">${v==null?'—':esc(v)}</td>`).join(''):''}${p.hasBehavior?[st.behavior.t1,st.behavior.t2,st.behavior.t3].map(v=>`<td class="${v==null?'pending':''}" style="white-space:normal;min-width:210px">${v==null?'—':esc(v)}</td>`).join(''):''}<td class="${st.promedio==null?'pending':''}">${st.promedioFinal==null?'—':fmtGrade(st.promedioFinal)}</td><td>${esc(st.situacionFinal)}</td></tr>`).join('')}
  </tbody></table></div></div>`;
  $('#downloadGradeExcel').onclick=downloadGradeConsolidatedExcel;
 }
@@ -1910,7 +1955,7 @@ async function downloadGradeConsolidatedExcel(){
   const p=pivotConsolidated(consolidatedRows);
   const wb=new ExcelJS.Workbook();wb.creator='Unidad Educativa Benjamín Ramírez Arteaga';wb.company='UEBRA';wb.subject='Consolidado de Calificaciones';wb.created=new Date();
   const ws=wb.addWorksheet(excelSafeName(`${consolidatedCourse.nombre} ${consolidatedCourse.jornada}`),{views:[{state:'frozen',xSplit:3,ySplit:7,topLeftCell:'D8',activeCell:'A8'}]});
-  const academicStart=4, subjectCount=p.subjects.length, academicEnd=academicStart+subjectCount*4-1;
+  const academicStart=4, subjectCount=p.subjects.length, academicEnd=academicStart+subjectCount*6-1;
   let col=academicEnd+1;
   const specialRanges=[];
   if(p.hasAnimation){specialRanges.push({name:'Animación a la Lectura',start:col,end:col+2,type:'animation'});col+=3}
@@ -1930,7 +1975,7 @@ async function downloadGradeConsolidatedExcel(){
   // Encabezados de tabla: filas 6 y 7
   const h1=ws.getRow(6),h2=ws.getRow(7);['N.º','Cédula','Estudiante','Estado'].forEach((v,i)=>{h1.getCell(i+1).value=v;ws.mergeCells(6,i+1,7,i+1)});
   let c=5;
-  p.subjects.forEach(s=>{ws.getCell(6,c).value=s.label;ws.mergeCells(6,c,6,c+3);['T1','T2','T3','PAL'].forEach((v,j)=>ws.getCell(7,c+j).value=v);c+=4});
+  p.subjects.forEach(s=>{ws.getCell(6,c).value=s.label;ws.mergeCells(6,c,6,c+5);['T1','T2','T3','PAL','Supletorio','Final'].forEach((v,j)=>ws.getCell(7,c+j).value=v);c+=6});
   specialRanges.forEach(r=>{ws.getCell(6,r.start+1).value=r.name;ws.mergeCells(6,r.start+1,6,r.end+1);['T1','T2','T3'].forEach((v,j)=>ws.getCell(7,r.start+1+j).value=v)});
   ws.getCell(6,avgCol+1).value='Promedio General';ws.mergeCells(6,avgCol+1,7,avgCol+1);ws.getCell(6,statusCol+1).value='Situación Académica';ws.mergeCells(6,statusCol+1,7,statusCol+1);
   const academicFill='FFDCEAF7',specialFill='FFEDE7F6',identityFill='FFE8EEF5',finalFill='FFE7F4EA',border={top:{style:'thin',color:{argb:'FFB9C5D2'}},left:{style:'thin',color:{argb:'FFB9C5D2'}},bottom:{style:'thin',color:{argb:'FFB9C5D2'}},right:{style:'thin',color:{argb:'FFB9C5D2'}}};
@@ -1939,11 +1984,11 @@ async function downloadGradeConsolidatedExcel(){
   // Datos
   p.students.forEach((st,i)=>{
    const row=ws.getRow(8+i);let vals=[i+1,String(st.cedula||''),st.nombre,st.estado||''];
-   p.subjects.forEach(s=>{let g=st.grades[s.key]||{};vals.push(g.t1==null?'—':Number(g.t1),g.t2==null?'—':Number(g.t2),g.t3==null?'—':Number(g.t3),g.pal==null?'—':Number(g.pal))});
+   p.subjects.forEach(s=>{let g=st.grades[s.key]||{};vals.push(g.t1==null?'—':Number(g.t1),g.t2==null?'—':Number(g.t2),g.t3==null?'—':Number(g.t3),g.pal==null?'—':Number(g.pal),g.supp==null?'—':Number(g.supp),g.final==null?'—':Number(g.final))});
    if(p.hasAnimation)vals.push(st.animation.t1==null?'—':Number(st.animation.t1),st.animation.t2==null?'—':Number(st.animation.t2),st.animation.t3==null?'—':Number(st.animation.t3));
    if(p.hasOvp)vals.push(st.ovp.t1||'—',st.ovp.t2||'—',st.ovp.t3||'—');
    if(p.hasBehavior)vals.push(st.behavior.t1||'—',st.behavior.t2||'—',st.behavior.t3||'—');
-   vals.push(st.promedio==null?'—':Number(st.promedio),st.situacion||'PENDIENTE');row.values=vals;
+   vals.push(st.promedioFinal==null?'—':Number(st.promedioFinal),st.situacionFinal||'PENDIENTE');row.values=vals;
    row.height=26;
    for(let cc=1;cc<=lastCol+1;cc++){let cell=row.getCell(cc);cell.font={name:'Arial',size:9};cell.border=border;cell.alignment={vertical:'middle',horizontal:(cc===3||cc===4||cc===statusCol+1)?'left':'center',wrapText:cc===3||cc===statusCol+1||specialRanges.some(r=>r.type==='behavior'&&cc>=r.start+1&&cc<=r.end+1)};if(i%2===1)cell.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF8FAFC'}}}
    // Formato numérico y alerta bajo 7 SOLO en calificaciones numéricas académicas y Animación
@@ -1959,7 +2004,7 @@ async function downloadGradeConsolidatedExcel(){
   ws.headerFooter.oddFooter='&LUEBRA&CConsolidado de Calificaciones&R Página &P de &N';
   ws.properties.defaultRowHeight=18;
   // Leyenda
-  const legendRow=8+p.students.length+2;ws.mergeCells(legendRow,1,legendRow,lastCol+1);let lc=ws.getCell(legendRow,1);lc.value='Referencia visual: celdas en rojo suave = calificación numérica inferior a 7,00. Animación, OVP y Comportamiento son evaluaciones complementarias y no modifican el promedio académico.';lc.font={name:'Arial',italic:true,size:9,color:{argb:'FF667085'}};lc.alignment={wrapText:true,vertical:'middle'};lc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F6F8'}};lc.border=border;ws.getRow(legendRow).height=30;
+  const legendRow=8+p.students.length+2;ws.mergeCells(legendRow,1,legendRow,lastCol+1);let lc=ws.getCell(legendRow,1);lc.value='PAL = promedio anual ordinario. Supletorio se muestra desde 5.º EGB cuando corresponde. Final incorpora el resultado del supletorio: si se aprueba con nota ≥ 7,00, la calificación anual final queda en 7,00. El Promedio General y la Situación Académica se calculan con las calificaciones finales. Animación, OVP y Comportamiento no modifican el promedio académico.';lc.font={name:'Arial',italic:true,size:9,color:{argb:'FF667085'}};lc.alignment={wrapText:true,vertical:'middle'};lc.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FFF4F6F8'}};lc.border=border;ws.getRow(legendRow).height=30;
   // Logo institucional desde el mismo sitio (si está disponible). Si falla, el Excel se genera normalmente.
   try{let resp=await fetch('./logo-uebra.png',{cache:'force-cache'});if(resp.ok){let blob=await resp.blob(),buf=await blob.arrayBuffer();let imgId=wb.addImage({buffer:buf,extension:(blob.type||'').includes('jpeg')?'jpeg':'png'});ws.addImage(imgId,{tl:{col:1.45,row:0.05},ext:{width:200,height:133},editAs:'oneCell'})}}catch(e){}
   const buffer=await wb.xlsx.writeBuffer();const blob=new Blob([buffer],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Consolidado_${consolidatedCourse.nombre}_${consolidatedCourse.jornada}_2026-2027.xlsx`.replace(/\s+/g,'_');document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1500);toast('✓ Consolidado institucional descargado');
