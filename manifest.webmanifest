@@ -1,8 +1,9 @@
 {
+  "id": "/UEBRA-PLUS/",
   "name": "UEBRA+ - Plataforma Integral de Gestión Educativa",
   "short_name": "UEBRA+",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/UEBRA-PLUS/",
+  "scope": "/UEBRA-PLUS/",
   "display": "standalone",
   "background_color": "#f4f6f9",
   "theme_color": "#173f6b",
