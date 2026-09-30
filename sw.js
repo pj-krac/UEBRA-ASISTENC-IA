@@ -1,6 +1,7 @@
-const CACHE='uebra-plus-v1';
+const CACHE_PREFIX = 'uebra-plus-';
+const CACHE = `${CACHE_PREFIX}v2`;
 
-const ASSETS=[
+const ASSETS = [
   './',
   './index.html',
   './config.js',
@@ -10,35 +11,37 @@ const ASSETS=[
   './icon-512.png'
 ];
 
-self.addEventListener('install',e=>{
+self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE).then(c=>c.addAll(ASSETS))
+    caches.open(CACHE).then(c => c.addAll(ASSETS))
   );
 });
 
-self.addEventListener('activate',e=>{
+self.addEventListener('activate', e => {
   e.waitUntil(
-    caches.keys().then(ks=>
+    caches.keys().then(ks =>
       Promise.all(
-        ks.filter(k=>k!==CACHE).map(k=>caches.delete(k))
+        ks
+          .filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE)
+          .map(k => caches.delete(k))
       )
     )
   );
 });
 
-self.addEventListener('fetch',e=>{
-  if(e.request.method!=='GET') return;
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
 
   e.respondWith(
     fetch(e.request)
-      .then(r=>{
-        const copia=r.clone();
-        caches.open(CACHE).then(c=>c.put(e.request,copia));
+      .then(r => {
+        const copia = r.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copia));
         return r;
       })
-      .catch(()=>
+      .catch(() =>
         caches.match(e.request)
-          .then(r=>r||caches.match('./index.html'))
+          .then(r => r || caches.match('./index.html'))
       )
   );
 });
