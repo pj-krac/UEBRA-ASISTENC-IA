@@ -320,7 +320,7 @@ function planningStateClass(state){if(state==='APROBADA')return 'approved';if(st
 function planningDateTime(v){if(!v)return 'Sin fecha límite configurada';let d=new Date(v);if(Number.isNaN(d.getTime()))return String(v);return new Intl.DateTimeFormat('es-EC',{dateStyle:'medium',timeStyle:'short'}).format(d)}
 function planningCanUpload(p){return p.estado==='BORRADOR'||p.estado==='DEVUELTA_DOCENTE'||p.estado==='DEVUELTA_VICERRECTORADO'}
 function planningIsLate(p){return !!p.fecha_limite_entrega&&Date.now()>new Date(p.fecha_limite_entrega).getTime()&&planningCanUpload(p)}
-let areaPlanningRows=[],areaPlanningStatus='PENDIENTES';
+let areaPlanningRows=[],areaPlanningStatus='PENDIENTES',isAreaDirector=false;
 function viceStateLabel(s){return ({EN_VICERRECTORADO:'Pendiente de revisión',DEVUELTA_VICERRECTORADO:'Devuelta',APROBADA:'Aprobada'})[s]||s||'—'}
 async function showVicerrectorado(){
  let box=$('#viceBody');if(!box)return;
@@ -348,8 +348,13 @@ async function showAcademicPlannings(){
  let own=await sb.rpc('my_academic_plannings',{p_anio_lectivo:'2026-2027',p_trimestre:null});
  if(own.error){box.innerHTML='<div class="card"><h2>📚 Planificaciones Académicas</h2><div class="notice">'+esc(own.error.message)+'</div></div>';return}
  planningRows=own.data||[];
- let area=await sb.rpc('area_director_academic_plannings',{p_anio_lectivo:'2026-2027',p_trimestre:null});
- areaPlanningRows=area.error?[]:(area.data||[]);
+ let areaRole=await sb.rpc('is_area_director');
+ isAreaDirector=areaRole.error?false:Boolean(areaRole.data);
+ areaPlanningRows=[];
+ if(isAreaDirector){
+   let area=await sb.rpc('area_director_academic_plannings',{p_anio_lectivo:'2026-2027',p_trimestre:null});
+   areaPlanningRows=area.error?[]:(area.data||[]);
+ }
  renderAcademicPlannings();
 }
 function renderAcademicPlannings(){
@@ -373,13 +378,13 @@ function areaPlanningVersion(r){return Number(areaVal(r,'version_actual','numero
 function areaPlanningPeriodMatches(r){let p=String(areaVal(r,'periodo_planificacion','periodo','nombre_trimestre')||'').toUpperCase();return p.startsWith(planningTrimester===1?'PRIMER':planningTrimester===2?'SEGUNDO':'TERCER')}
 function areaPlanningIsReviewable(r){return ['ENVIADA','REENVIADA','EN_REVISION_AREA'].includes(String(areaVal(r,'estado','estado_planificacion')).toUpperCase())}
 function renderAreaDirectorSection(){
- if(!areaPlanningRows.length)return '';
+ if(!isAreaDirector)return '';
  let all=areaPlanningRows.filter(areaPlanningPeriodMatches);
  let rows=all;
  if(areaPlanningStatus==='PENDIENTES')rows=all.filter(areaPlanningIsReviewable);
  else if(areaPlanningStatus!=='TODAS')rows=all.filter(r=>String(areaVal(r,'estado','estado_planificacion')).toUpperCase()===areaPlanningStatus);
  let reviewable=all.filter(areaPlanningIsReviewable).length,returned=all.filter(r=>areaVal(r,'estado','estado_planificacion')==='DEVUELTA_DOCENTE').length,vice=all.filter(r=>['EN_VICERRECTORADO','APROBADA'].includes(areaVal(r,'estado','estado_planificacion'))).length;
- return `<div class="card"><div class="planning-head"><div><h2>🧾 Bandeja de Revisión de Área</h2><p class="muted">Planificaciones asignadas a tu área en jornada MATUTINA y VESPERTINA. La revisión queda vinculada a la versión exacta entregada.</p></div></div><div class="planning-summary"><span>${all.length} del trimestre</span><span>${reviewable} por revisar</span><span>${returned} devueltas</span><span>${vice} remitidas/aprobadas</span></div><div class="area-review-toolbar"><select id="areaPlanningStatus"><option value="PENDIENTES" ${areaPlanningStatus==='PENDIENTES'?'selected':''}>Pendientes de revisión</option><option value="TODAS" ${areaPlanningStatus==='TODAS'?'selected':''}>Todas</option><option value="DEVUELTA_DOCENTE" ${areaPlanningStatus==='DEVUELTA_DOCENTE'?'selected':''}>Devueltas al docente</option><option value="EN_VICERRECTORADO" ${areaPlanningStatus==='EN_VICERRECTORADO'?'selected':''}>En Vicerrectorado</option><option value="APROBADA" ${areaPlanningStatus==='APROBADA'?'selected':''}>Aprobadas</option></select></div>${rows.length?rows.map(areaPlanningCardHtml).join(''):'<div class="planning-empty">No hay planificaciones en este filtro.</div>'}</div>`
+ return `<div class="card"><div class="planning-head"><div><h2>🧾 Bandeja de Revisión de Área</h2><p class="muted">Planificaciones asignadas a tu área en jornada MATUTINA y VESPERTINA. La revisión queda vinculada a la versión exacta entregada.</p></div></div><div class="planning-summary"><span>${all.length} del trimestre</span><span>${reviewable} por revisar</span><span>${returned} devueltas</span><span>${vice} remitidas/aprobadas</span></div><div class="area-review-toolbar"><select id="areaPlanningStatus"><option value="PENDIENTES" ${areaPlanningStatus==='PENDIENTES'?'selected':''}>Pendientes de revisión</option><option value="TODAS" ${areaPlanningStatus==='TODAS'?'selected':''}>Todas</option><option value="DEVUELTA_DOCENTE" ${areaPlanningStatus==='DEVUELTA_DOCENTE'?'selected':''}>Devueltas al docente</option><option value="EN_VICERRECTORADO" ${areaPlanningStatus==='EN_VICERRECTORADO'?'selected':''}>En Vicerrectorado</option><option value="APROBADA" ${areaPlanningStatus==='APROBADA'?'selected':''}>Aprobadas</option></select></div>${rows.length?rows.map(areaPlanningCardHtml).join(''):'<div class="planning-empty">No hay planificaciones en este filtro. Cuando una docente de tu área envíe una planificación, aparecerá aquí.</div>'}</div>`
 }
 function areaPlanningCardHtml(r){
  let id=areaPlanningId(r),state=String(areaVal(r,'estado','estado_planificacion')),ver=areaPlanningVersion(r),doc=areaVal(r,'docente','docente_nombre','teacher_name','nombre_docente'),course=areaVal(r,'curso','curso_nombre','course_name','nombre_curso'),shift=areaVal(r,'jornada'),subj=areaVal(r,'asignatura'),area=areaVal(r,'area','area_nombre'),reviewable=areaPlanningIsReviewable(r);
